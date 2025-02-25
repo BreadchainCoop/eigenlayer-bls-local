@@ -26,7 +26,7 @@ if [ "$ENVIRONMENT" = "TESTNET" ]; then
             exit 1
         fi
     else
-        cast rpc anvil_setBalance $ADDRESS 0x10000000000000000000 --rpc-url $RPC_URL  > /dev/null 2>&1
+        cast rpc anvil_setBalance $ADDRESS 0x10000000000000000000 --rpc-url $RPC_URL  
         if [ $? -ne 0 ]; then
             echo "Error: Failed to set balance for $ADDRESS"
             exit 1
