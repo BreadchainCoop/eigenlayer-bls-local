@@ -53,3 +53,15 @@ if [ "$ENVIRONMENT" != "TESTNET" ]; then
         exit 1
     fi
 fi
+
+# deploy script 
+
+cd bls-middleware/contracts && forge script script/IncredibleSquaringDeployer.s.sol --rpc-url $RPC_URL --broadcast
+if [ $? -ne 0 ]; then
+    echo "Error: Failed to run middleware deployment script"
+fi
+# make sure to write deployment json out
+#logic for registering operators to avs  
+# Keep container open for debugging
+echo "Script execution finished. Keeping container open..."
+while true; do sleep 1; done
