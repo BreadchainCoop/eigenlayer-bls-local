@@ -1,6 +1,6 @@
-# Opacity Local 
+# BLS Local 
 
-This repository contains the configuration and setup for running the Opacity AVS (Actively Validated Service) infrastructure using Docker Compose.
+This repository contains the configuration and setup for running the BLS AVS (Actively Validated Service) infrastructure using Docker Compose.
 
 ## Prerequisites
 
@@ -8,12 +8,6 @@ This repository contains the configuration and setup for running the Opacity AVS
 - Docker Compose
 
 ## Setup
-
-1. Clone this repository:
-   ```
-   git clone https://github.com/OpacityLabs/opacity-avs-node.git
-   cd opacity-avs-node
-   ```
 
 2. Create a `.env` file in the root directory and add the following environment variables:
    ```
@@ -46,8 +40,6 @@ The Docker Compose setup includes the following services:
 
 1. `ethereum`: An Ethereum node for local development and testing.
 2. `eigenlayer`: Sets up EigenLayer and registers operators.
-3. `nodeselector`: A node selector service for the Opacity AVS.
-4. `node1`, `node2`, `node3`: Opacity AVS nodes.
 
 ## Configuration
 
@@ -59,13 +51,6 @@ The Docker Compose setup includes the following services:
 
 - Ethereum RPC: http://localhost:8545
 - Node Selector: http://localhost:8080
-- Opacity AVS Nodes:
-  - Node 1 MPC-TLS: http://localhost:7047
-  - Node 1 BLS-Attestation: http://localhost:6047
-  - Node 2 MPC-TLS: http://localhost:7048
-  - Node 2 BLS-Attestation: http://localhost:6048
-  - Node 3 MPC-TLS: http://localhost:7049
-  - Node 3 BLS-Attestation: http://localhost:6049
 
 ## Notes
 
