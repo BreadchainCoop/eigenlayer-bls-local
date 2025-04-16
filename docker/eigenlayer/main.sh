@@ -66,12 +66,17 @@ else
 fi
 
 export PRIVATE_KEY=$DEPLOYER_KEY
-
-cd bls-middleware/contracts && forge script script/IncredibleSquaringDeployer.s.sol --rpc-url $RPC_URL --broadcast
+chain_id=$(cast chain-id --rpc-url $RPC_URL)
+cd bls-middleware/contracts && forge script script/IncredibleSquaringDeployer.s.sol --rpc-url $RPC_URL --skip src/libraries/BN256G2.sol --optimize --broadcast
 if [ $? -ne 0 ]; then
     echo "Error: Failed to run middleware deployment script"
 fi
-cp script/deployments/incredible-squaring/1.json ~/.nodes/avs_deploy.json
+cp script/deployments/incredible-squaring/$chain_id.json ~/.nodes/avs_deploy.json
+cp script/deployments/incredible-squaring/$chain_id.json avs_deploy.json
+cp ~/.nodes/operator_keys/testacc1.private.ecdsa.key.json private.ecdsa.json
+cp ~/.nodes/operator_keys/testacc1.private.bls.key.json private.bls.json
+forge script script/RegisterOperator.s.sol --rpc-url $RPC_URL --broadcast 
+
 # make sure to write deployment json out
 #logic for registering operators to avs  
 # Keep container open for debugging
