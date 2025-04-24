@@ -75,6 +75,7 @@ cp script/deployments/incredible-squaring/$chain_id.json ~/.nodes/avs_deploy.jso
 cp script/deployments/incredible-squaring/$chain_id.json avs_deploy.json
 cp ~/.nodes/operator_keys/testacc1.private.ecdsa.key.json private.ecdsa.json
 cp ~/.nodes/operator_keys/testacc1.private.bls.key.json private.bls.json
+forge script script/UAMPermissions.s.sol --rpc-url $RPC_URL --broadcast --private-key $PRIVATE_KEY
 forge script script/RegisterOperator.s.sol --rpc-url $RPC_URL --broadcast 
 
 # make sure to write deployment json out
