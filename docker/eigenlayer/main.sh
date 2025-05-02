@@ -73,14 +73,58 @@ if [ $? -ne 0 ]; then
 fi
 cp script/deployments/incredible-squaring/$chain_id.json ~/.nodes/avs_deploy.json
 cp script/deployments/incredible-squaring/$chain_id.json avs_deploy.json
+forge script script/UAMPermissions.s.sol --rpc-url $RPC_URL --broadcast --private-key $PRIVATE_KEY > /dev/null 2>&1
+if [ $? -ne 0 ]; then
+    echo "Error: Failed to run UAMPermissions script"
+fi
+forge script script/SetupMiddleware.s.sol --rpc-url $RPC_URL --broadcast --private-key $PRIVATE_KEY > /dev/null 2>&1
+if [ $? -ne 0 ]; then
+    echo "Error: Failed to run SetupMiddleware script"
+fi
 cp ~/.nodes/operator_keys/testacc1.private.ecdsa.key.json private.ecdsa.json
 cp ~/.nodes/operator_keys/testacc1.private.bls.key.json private.bls.json
-forge script script/UAMPermissions.s.sol --rpc-url $RPC_URL --broadcast --private-key $PRIVATE_KEY
-forge script script/SetupMiddleware.s.sol --rpc-url $RPC_URL --broadcast --private-key $PRIVATE_KEY
-forge script script/RegisterOperator.s.sol --rpc-url $RPC_URL --broadcast 
 
-# make sure to write deployment json out
-#logic for registering operators to avs  
+# Get stake registry address once
+STAKE_REGISTRY=$(cat avs_deploy.json | jq -r '.addresses.stakeRegistry')
+if [ -z "$STAKE_REGISTRY" ] || [ "$STAKE_REGISTRY" = "null" ]; then
+    echo "Error: Failed to get stake registry address from deployment JSON"
+    exit 1
+fi
+
+# Number of operators to process
+NUM_OPERATORS=3
+
+# Process all operators
+for i in $(seq 1 $NUM_OPERATORS); do
+    echo "Processing operator $i..."
+    
+    # Copy operator keys
+    cp ~/.nodes/operator_keys/testacc${i}.private.ecdsa.key.json private.ecdsa.json
+    cp ~/.nodes/operator_keys/testacc${i}.private.bls.key.json private.bls.json
+    
+    # Get operator private key and address
+    OPERATOR_PRIVATE_KEY=$(cat private.ecdsa.json | jq -r .privateKey)
+    if [ -z "$OPERATOR_PRIVATE_KEY" ]; then
+        echo "Error: Failed to extract private key from private.ecdsa.json for operator $i"
+        exit 1
+    fi
+    OPERATOR_ADDRESS=$(cast wallet address --private-key $OPERATOR_PRIVATE_KEY)
+    
+    # Register operator
+    echo "Registering operator $i..."
+    forge script script/RegisterOperator.s.sol --rpc-url $RPC_URL --broadcast --private-key $OPERATOR_PRIVATE_KEY > /dev/null 2>&1
+    
+    # Check operator weight
+    echo "Checking operator $i weight in quorum..."
+    WEIGHT=$(cast call $STAKE_REGISTRY "weightOfOperatorForQuorum(uint8,address)(uint96)" 0 $OPERATOR_ADDRESS --rpc-url $RPC_URL)
+    if [ $? -ne 0 ]; then
+        echo "Error: Failed to get operator weight for quorum for operator $i"
+        exit 1
+    fi
+    
+    echo "Operator $i weight in quorum 0: $WEIGHT"
+done
+
 # Keep container open for debugging
 echo "Script execution finished. Keeping container open..."
 while true; do sleep 1; done
