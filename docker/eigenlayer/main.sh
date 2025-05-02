@@ -45,6 +45,12 @@ for i in $(seq 1 $num_accounts); do
         exit 1
     fi
 done
+
+if [ "$ENVIRONMENT" = "TESTNET" ]; then
+    echo "Sleeping for 5 minutes to allow allocation delay to be processed on testnet..."
+    sleep 300
+fi
+
 # deploy script 
 # Create deployer account and fund it
 DEPLOYER_INFO=$(cast wallet new --json)
@@ -77,8 +83,6 @@ forge script script/SetupMiddleware.s.sol --rpc-url $RPC_URL --broadcast --priva
 if [ $? -ne 0 ]; then
     echo "Error: Failed to run SetupMiddleware script"
 fi
-cp ~/.nodes/operator_keys/testacc1.private.ecdsa.key.json private.ecdsa.json
-cp ~/.nodes/operator_keys/testacc1.private.bls.key.json private.bls.json
 
 # Get stake registry address once
 STAKE_REGISTRY=$(cat avs_deploy.json | jq -r '.addresses.stakeRegistry')
@@ -103,10 +107,9 @@ for i in $(seq 1 $num_accounts); do
     OPERATOR_ADDRESS=$(cast wallet address --private-key $OPERATOR_PRIVATE_KEY)
     
     # Register operator
-    forge script script/RegisterOperator.s.sol --rpc-url $RPC_URL --broadcast --private-key $OPERATOR_PRIVATE_KEY #> /dev/null 2>&1
+    forge script script/RegisterOperator.s.sol --rpc-url $RPC_URL --broadcast --private-key $OPERATOR_PRIVATE_KEY --isolate --slow --skip-simulation #> /dev/null 2>&1
     if [ $? -ne 0 ]; then
-        echo "Error: Failed to register operator $i"
-        exit 1
+        echo "Error: Failed to register operator $OPERATOR_ADDRESS"
     fi
     WEIGHT=$(cast call $STAKE_REGISTRY "weightOfOperatorForQuorum(uint8,address)(uint96)" 0 $OPERATOR_ADDRESS --rpc-url $RPC_URL)
     if [ $? -ne 0 ]; then
