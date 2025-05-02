@@ -26,7 +26,7 @@ if [ "$ENVIRONMENT" = "TESTNET" ]; then
             exit 1
         fi
     else
-        cast rpc anvil_setBalance $ADDRESS 0x10000000000000000000 --rpc-url $RPC_URL  
+        cast rpc anvil_setBalance $ADDRESS 0x10000000000000000000 --rpc-url $RPC_URL > /dev/null 2>&1
         if [ $? -ne 0 ]; then
             echo "Error: Failed to set balance for $ADDRESS"
             exit 1
@@ -50,7 +50,7 @@ if [ $? -ne 0 ]; then
     echo "Error: Failed to deposit into strategy for $LST_STRATEGY_ADDRESS"
     exit 1
 fi
-cast send $DELEGATION_MANAGER_ADDRESS "registerAsOperator(address,uint32,string)" `cast az` 0 "foo.bar" --private-key $PRIVATE_KEY --rpc-url $RPC_URL > /dev/null 2>&1
+cast send $DELEGATION_MANAGER_ADDRESS "registerAsOperator(address,uint32,string)" "$ADDRESS"  "0" "foo.bar" --private-key $PRIVATE_KEY --rpc-url $RPC_URL > /dev/null 2>&1
 if [ $? -ne 0 ]; then
     echo "Error: Failed to register as operator for $DELEGATION_MANAGER_ADDRESS"
     exit 1
@@ -93,27 +93,6 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 echo -n $result > $HOME/.nodes/operator_keys/${new_account}.bls.identifier
+echo -n "{\"privateKey\":\"$private_bls_key\"}" > $HOME/.nodes/operator_keys/${new_account}.private.bls.key.json
+echo -n "{\"privateKey\":\"$PRIVATE_KEY\",\"publicKey\":\"$ADDRESS\"}" > $HOME/.nodes/operator_keys/${new_account}.private.ecdsa.key.json
 cp $HOME/.eigenlayer/operator_keys/${new_account}.bls.key.json $HOME/.nodes/operator_keys/${new_account}.bls.key.json
-
-# Create the config file for the new account
-config_file="${HOME}/.nodes/configs/${new_account}.config.yaml"
-
-# Set the node public IP based on the account number
-node_public_ip="http://node${new_num}"
-
-# Create the config file with the correct values
-cat << EOF > "$config_file"
-production: false
-opacity_node_selector_address: 0x8a2c56230E89C4636e5b7878541e66aBA2091FcD
-registry_coordinator_address: "0x3e43AA225b5cB026C5E8a53f62572b10D526a50B"
-opacity_avs_address: "0xbfc5d26C6eEb46475eB3960F5373edC5341eE535"
-avs_directory_address: "0x055733000064333CaDDbC92763c58BF0192fFeBf"
-eigenlayer_delegation_manager: "0xA44151489861Fe9e3055d95adC98FbD462B948e7"
-chain_id: 17000
-eth_rpc_url: '${RPC_URL}'
-operator_address: '${ADDRESS}'
-node_public_ip: ${node_public_ip}
-operator_bls_keystore_path: /opacity-avs-node/config/opacity.bls.key.json
-operator_id: "0x00"
-EOF
-
