@@ -1,7 +1,7 @@
 # BLS Local 
 
 This repository contains the configuration and setup for running the BLS AVS (Actively Validated Service) infrastructure using Docker Compose.
-
+Relies on [BLS-middleware](https://github.com/BreadchainCoop/bls-middleware)
 ## Prerequisites
 
 - Docker
