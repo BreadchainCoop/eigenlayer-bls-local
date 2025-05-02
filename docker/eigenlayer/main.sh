@@ -34,7 +34,7 @@ rm -rf $HOME/.nodes/operator_keys/*
 if [ -n "$TEST_ACCOUNTS" ]; then
     num_accounts=$TEST_ACCOUNTS
 else
-    num_accounts=3
+    num_accounts=1
 fi
 
 for i in $(seq 1 $num_accounts); do
@@ -45,6 +45,12 @@ for i in $(seq 1 $num_accounts); do
         exit 1
     fi
 done
+
+if [ "$ENVIRONMENT" = "TESTNET" ]; then
+    echo "Sleeping for 5 minutes to allow allocation delay to be processed on testnet..."
+    sleep 300
+fi
+
 # deploy script 
 # Create deployer account and fund it
 DEPLOYER_INFO=$(cast wallet new --json)
@@ -52,11 +58,7 @@ DEPLOYER_KEY=$(echo "$DEPLOYER_INFO" | jq -r '.[0].private_key')
 DEPLOYER_ADDRESS=$(echo "$DEPLOYER_INFO" | jq -r '.[0].address')
 
 if [ "$ENVIRONMENT" = "TESTNET" ]; then
-    cast s $DEPLOYER_ADDRESS --value 10000000000000000 --private-key "$FUNDED_KEY" -r "$RPC_URL" > /dev/null 2>&1
-    if [ $? -ne 0 ]; then
-        echo "Error: Failed to fund deployer account"
-        exit 1
-    fi
+    DEPLOYER_KEY=$FUNDED_KEY
 else
     cast rpc anvil_setBalance $DEPLOYER_ADDRESS 0x10000000000000000000 --rpc-url $RPC_URL > /dev/null 2>&1
     if [ $? -ne 0 ]; then
@@ -67,7 +69,7 @@ fi
 
 export PRIVATE_KEY=$DEPLOYER_KEY
 chain_id=$(cast chain-id --rpc-url $RPC_URL)
-cd bls-middleware/contracts && forge script script/IncredibleSquaringDeployer.s.sol --rpc-url $RPC_URL --skip src/libraries/BN256G2.sol --optimize --broadcast
+cd bls-middleware/contracts && forge script script/IncredibleSquaringDeployer.s.sol --rpc-url $RPC_URL --skip src/libraries/BN256G2.sol --optimize --broadcast --private-key $PRIVATE_KEY > /dev/null 2>&1
 if [ $? -ne 0 ]; then
     echo "Error: Failed to run middleware deployment script"
 fi
@@ -81,8 +83,6 @@ forge script script/SetupMiddleware.s.sol --rpc-url $RPC_URL --broadcast --priva
 if [ $? -ne 0 ]; then
     echo "Error: Failed to run SetupMiddleware script"
 fi
-cp ~/.nodes/operator_keys/testacc1.private.ecdsa.key.json private.ecdsa.json
-cp ~/.nodes/operator_keys/testacc1.private.bls.key.json private.bls.json
 
 # Get stake registry address once
 STAKE_REGISTRY=$(cat avs_deploy.json | jq -r '.addresses.stakeRegistry')
@@ -91,11 +91,7 @@ if [ -z "$STAKE_REGISTRY" ] || [ "$STAKE_REGISTRY" = "null" ]; then
     exit 1
 fi
 
-# Number of operators to process
-NUM_OPERATORS=3
-
-# Process all operators
-for i in $(seq 1 $NUM_OPERATORS); do
+for i in $(seq 1 $num_accounts); do
     echo "Processing operator $i..."
     
     # Copy operator keys
@@ -111,11 +107,10 @@ for i in $(seq 1 $NUM_OPERATORS); do
     OPERATOR_ADDRESS=$(cast wallet address --private-key $OPERATOR_PRIVATE_KEY)
     
     # Register operator
-    echo "Registering operator $i..."
-    forge script script/RegisterOperator.s.sol --rpc-url $RPC_URL --broadcast --private-key $OPERATOR_PRIVATE_KEY > /dev/null 2>&1
-    
-    # Check operator weight
-    echo "Checking operator $i weight in quorum..."
+    forge script script/RegisterOperator.s.sol --rpc-url $RPC_URL --broadcast --private-key $OPERATOR_PRIVATE_KEY --isolate --slow --skip-simulation #> /dev/null 2>&1
+    if [ $? -ne 0 ]; then
+        echo "Error: Failed to register operator $OPERATOR_ADDRESS"
+    fi
     WEIGHT=$(cast call $STAKE_REGISTRY "weightOfOperatorForQuorum(uint8,address)(uint96)" 0 $OPERATOR_ADDRESS --rpc-url $RPC_URL)
     if [ $? -ne 0 ]; then
         echo "Error: Failed to get operator weight for quorum for operator $i"

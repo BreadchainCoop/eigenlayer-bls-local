@@ -20,7 +20,7 @@ ACCOUNT_INFO=$(cast wallet new --json)
 PRIVATE_KEY=$(echo "$ACCOUNT_INFO" | jq -r '.[0].private_key')
 ADDRESS=$(echo "$ACCOUNT_INFO" | jq -r '.[0].address')
 if [ "$ENVIRONMENT" = "TESTNET" ]; then
-        cast s $ADDRESS --value 50000000000000000 --private-key "$FUNDED_KEY" -r "$RPC_URL" > /dev/null 2>&1
+        cast s $ADDRESS --value 500000000000000000 --private-key "$FUNDED_KEY" -r "$RPC_URL" > /dev/null 2>&1
         if [ $? -ne 0 ]; then   
             echo "Error: Failed to give operator $index balance"
             exit 1
@@ -50,7 +50,7 @@ if [ $? -ne 0 ]; then
     echo "Error: Failed to deposit into strategy for $LST_STRATEGY_ADDRESS"
     exit 1
 fi
-cast send $DELEGATION_MANAGER_ADDRESS "registerAsOperator(address,uint32,string)" "$ADDRESS"  "0" "foo.bar" --private-key $PRIVATE_KEY --rpc-url $RPC_URL > /dev/null 2>&1
+cast send $DELEGATION_MANAGER_ADDRESS "registerAsOperator(address,uint32,string)" "$ADDRESS"  "1" "foo.bar" --private-key $PRIVATE_KEY --rpc-url $RPC_URL > /dev/null 2>&1
 if [ $? -ne 0 ]; then
     echo "Error: Failed to register as operator for $DELEGATION_MANAGER_ADDRESS"
     exit 1
