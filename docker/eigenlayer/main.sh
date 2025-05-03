@@ -99,18 +99,19 @@ for i in $(seq 1 $num_accounts); do
     cp ~/.nodes/operator_keys/testacc${i}.private.bls.key.json private.bls.json
     
     # Get operator private key and address
-    OPERATOR_PRIVATE_KEY=$(cat private.ecdsa.json | jq -r .privateKey)
+    export OPERATOR_PRIVATE_KEY=$(cat private.ecdsa.json | jq -r .privateKey)
     if [ -z "$OPERATOR_PRIVATE_KEY" ]; then
         echo "Error: Failed to extract private key from private.ecdsa.json for operator $i"
         exit 1
     fi
-    OPERATOR_ADDRESS=$(cast wallet address --private-key $OPERATOR_PRIVATE_KEY)
     
-    # Register operator
     forge script script/RegisterOperator.s.sol --rpc-url $RPC_URL --broadcast --private-key $OPERATOR_PRIVATE_KEY --isolate --slow --skip-simulation #> /dev/null 2>&1
     if [ $? -ne 0 ]; then
         echo "Error: Failed to register operator $OPERATOR_ADDRESS"
     fi
+    
+    OPERATOR_ADDRESS=$(cast wallet address --private-key $OPERATOR_PRIVATE_KEY)
+    
     WEIGHT=$(cast call $STAKE_REGISTRY "weightOfOperatorForQuorum(uint8,address)(uint96)" 0 $OPERATOR_ADDRESS --rpc-url $RPC_URL)
     if [ $? -ne 0 ]; then
         echo "Error: Failed to get operator weight for quorum for operator $i"
