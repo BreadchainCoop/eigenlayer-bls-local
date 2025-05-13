@@ -47,6 +47,35 @@ The Docker Compose setup includes the following services:
 - Node configurations are stored in `.nodes/configs/`.
 - Operator keys are stored in `.nodes/operator_keys/`.
 
+### BLS AVS Configuration File (config.json)
+
+The BLS AVS configuration is defined in `docker/eigenlayer/config.json` and controls the key parameters for the AVS:
+
+```json
+{
+    "quorum": {
+        "minimumStake": "1",
+        "maxOperatorCount": 32,
+        "kickBIPsOfOperatorStake": 10000,
+        "kickBIPsOfTotalStake": 100
+    },
+    "metadata": {
+        "uri": "metadataURI"
+    }
+}
+```
+
+Configuration options:
+
+- **Quorum Settings**:
+  - `minimumStake`: The minimum amount of stake (in wei) required for an operator to participate
+  - `maxOperatorCount`: The maximum number of operators allowed in the AVS (32 by default)
+  - `kickBIPsOfOperatorStake`: Percentage of an operator's stake that can be slashed (in basis points, 10000 = 100%)
+  - `kickBIPsOfTotalStake`: Percentage of total stake that can be slashed (in basis points, 100 = 1%)
+
+- **Metadata**:
+  - `uri`: The URI pointing to the AVS metadata
+
 ## Accessing the Services
 
 - Ethereum RPC: http://localhost:8545
