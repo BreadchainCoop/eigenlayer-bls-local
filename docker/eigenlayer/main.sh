@@ -49,6 +49,9 @@ done
 if [ "$ENVIRONMENT" = "TESTNET" ]; then
     echo "Sleeping for 5 minutes to allow allocation delay to be processed on testnet..."
     sleep 360
+else 
+    echo "Sleeping for 180 seconds to allow allocation delay to be processed locally..."
+    sleep 180
 fi
 
 # deploy script 

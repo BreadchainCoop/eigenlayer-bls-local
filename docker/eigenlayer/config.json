@@ -1,0 +1,11 @@
+{
+    "quorum": {
+        "minimumStake": "1",
+        "maxOperatorCount": 32,
+        "kickBIPsOfOperatorStake": 10000,
+        "kickBIPsOfTotalStake": 100
+    },
+    "metadata": {
+        "uri": "metadataURI"
+    }
+} 
