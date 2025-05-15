@@ -50,8 +50,11 @@ if [ "$ENVIRONMENT" = "TESTNET" ]; then
     echo "Sleeping for 5 minutes to allow allocation delay to be processed on testnet..."
     sleep 360
 else 
-    echo "Sleeping for 180 seconds to allow allocation delay to be processed locally..."
-    sleep 180
+    echo "Using evm_increaseTime to advance blockchain time by 380 seconds..."
+    # Increase EVM time by 380 seconds
+    cast rpc evm_increaseTime 380 --rpc-url $RPC_URL > /dev/null 2>&1
+    # Mine a new block to apply the time change
+    cast rpc anvil_mine --rpc-url $RPC_URL > /dev/null 2>&1
 fi
 
 # deploy script 
