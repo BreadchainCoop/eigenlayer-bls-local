@@ -52,7 +52,7 @@ if [ "$ENVIRONMENT" = "TESTNET" ]; then
 else 
     echo "Using evm_increaseTime to advance blockchain time by 380 seconds..."
     # Increase EVM time by 380 seconds
-    cast rpc evm_increaseTime 380 --rpc-url $RPC_URL > /dev/null 2>&1
+    cast rpc evm_increaseTime 480 --rpc-url $RPC_URL > /dev/null 2>&1
     # Mine a new block to apply the time change
     cast rpc anvil_mine --rpc-url $RPC_URL > /dev/null 2>&1
 fi
@@ -110,6 +110,9 @@ for i in $(seq 1 $num_accounts); do
         echo "Error: Failed to extract private key from private.ecdsa.json for operator $i"
         exit 1
     fi
+    
+    # Set the operator ID for registration
+    export OPERATOR_ID="testacc${i}"
     
     forge script script/RegisterOperator.s.sol --rpc-url $RPC_URL --broadcast --private-key $OPERATOR_PRIVATE_KEY --isolate --slow --skip-simulation #> /dev/null 2>&1
     if [ $? -ne 0 ]; then
