@@ -61,20 +61,49 @@ The BLS AVS configuration is defined in `docker/eigenlayer/config.json` and cont
     },
     "metadata": {
         "uri": "metadataURI"
+    },
+    "operators": {
+        "testacc1": {
+            "socketAddress": "127.0.0.1:3000"
+        },
+        "testacc2": {
+            "socketAddress": "127.0.0.1:3000"
+        },
+        "testacc3": {
+            "socketAddress": "127.0.0.1:3000"
+        }
     }
 }
 ```
 
-Configuration options:
+#### Configuration Options
 
-- **Quorum Settings**:
-  - `minimumStake`: The minimum amount of stake (in wei) required for an operator to participate
-  - `maxOperatorCount`: The maximum number of operators allowed in the AVS (32 by default)
-  - `kickBIPsOfOperatorStake`: Percentage of an operator's stake that can be slashed (in basis points, 10000 = 100%)
-  - `kickBIPsOfTotalStake`: Percentage of total stake that can be slashed (in basis points, 100 = 1%)
+##### Quorum Settings
+- `minimumStake`: The minimum amount of stake (in wei) required for an operator to participate in the AVS. This is the minimum amount of tokens an operator must stake to be considered active.
+- `maxOperatorCount`: The maximum number of operators allowed in the AVS. Default is 32. This limits the total number of operators that can participate in the service.
+- `kickBIPsOfOperatorStake`: The percentage of an operator's stake that can be slashed (in basis points). 10000 basis points = 100%. This determines how much of an operator's stake can be slashed if they misbehave.
+- `kickBIPsOfTotalStake`: The percentage of total stake that can be slashed (in basis points). 100 basis points = 1%. This sets the maximum amount of total stake that can be slashed across all operators.
 
-- **Metadata**:
-  - `uri`: The URI pointing to the AVS metadata
+##### Metadata
+- `uri`: The URI pointing to the AVS metadata. This should contain information about the AVS service, its purpose, and any relevant documentation.
+
+##### Operators
+- Each operator entry contains:
+  - `socketAddress`: The network address where the operator's node can be reached. Format should be `IP:PORT`.
+  - Multiple operators can be configured, each with their own unique identifier (e.g., "testacc1", "testacc2", etc.)
+
+#### Recommended Settings
+
+For a production environment:
+- `minimumStake`: Set based on your security requirements. Higher values ensure more committed operators.
+- `maxOperatorCount`: Adjust based on your network's capacity and decentralization goals.
+- `kickBIPsOfOperatorStake`: Typically set to 10000 (100%) to allow full slashing of misbehaving operators.
+- `kickBIPsOfTotalStake`: Set based on your risk tolerance. Lower values (e.g., 100 = 1%) provide more protection against mass slashing events.
+
+For a test environment:
+- You can use lower values for `minimumStake` to make testing easier
+- Keep `maxOperatorCount` small (e.g., 3-5) for testing purposes
+- Use test operator addresses with appropriate test network configurations
 
 ## Accessing the Services
 
