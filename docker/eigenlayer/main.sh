@@ -130,6 +130,8 @@ for i in $(seq 1 $num_accounts); do
             exit 1
         fi
     fi
+    # Set the operator ID for registration
+    export OPERATOR_ID="testacc${i}"
     
     forge script script/RegisterOperator.s.sol --rpc-url $RPC_URL --broadcast --private-key $OPERATOR_PRIVATE_KEY --isolate --slow --skip-simulation #> /dev/null 2>&1
     if [ $? -ne 0 ]; then
