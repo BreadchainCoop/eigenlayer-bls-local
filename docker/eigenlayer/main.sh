@@ -49,12 +49,6 @@ done
 if [ "$ENVIRONMENT" = "TESTNET" ]; then
     echo "Sleeping for 5 minutes to allow allocation delay to be processed on testnet..."
     sleep 360
-else 
-    echo "Using evm_increaseTime to advance blockchain time by 380 seconds..."
-    # Increase EVM time by 380 seconds
-    cast rpc evm_increaseTime 480 --rpc-url $RPC_URL > /dev/null 2>&1
-    # Mine a new block to apply the time change
-    cast rpc anvil_mine --rpc-url $RPC_URL > /dev/null 2>&1
 fi
 
 # deploy script 
@@ -111,6 +105,31 @@ for i in $(seq 1 $num_accounts); do
         exit 1
     fi
     
+    OPERATOR_ADDRESS=$(cast wallet address --private-key $OPERATOR_PRIVATE_KEY)
+    
+    if [ "$ENVIRONMENT" = "local" ]; then
+        echo "Getting delegation manager and overriding allocation delay..."
+        
+        # Set balance and impersonate the delegation manager
+        cast rpc anvil_setBalance $DELEGATION_MANAGER_ADDRESS 0x10000000000000000 --rpc-url $RPC_URL > /dev/null 2>&1
+        if [ $? -ne 0 ]; then
+            echo "Error: Failed to set balance for delegation manager"
+            exit 1
+        fi
+        
+        cast rpc anvil_impersonateAccount $DELEGATION_MANAGER_ADDRESS --rpc-url $RPC_URL > /dev/null 2>&1
+        if [ $? -ne 0 ]; then
+            echo "Error: Failed to impersonate delegation manager"
+            exit 1
+        fi
+        
+        # Call the function to override allocation delay
+        cast send $ALLOCATION_MANAGER_ADDRESS "setAllocationDelay(address,uint32)" $OPERATOR_ADDRESS 0 --from $DELEGATION_MANAGER_ADDRESS --unlocked --rpc-url $RPC_URL > /dev/null 2>&1
+        if [ $? -ne 0 ]; then
+            echo "Error: Failed to override allocation delay"
+            exit 1
+        fi
+    fi
     # Set the operator ID for registration
     export OPERATOR_ID="testacc${i}"
     
@@ -118,8 +137,6 @@ for i in $(seq 1 $num_accounts); do
     if [ $? -ne 0 ]; then
         echo "Error: Failed to register operator $OPERATOR_ADDRESS"
     fi
-    
-    OPERATOR_ADDRESS=$(cast wallet address --private-key $OPERATOR_PRIVATE_KEY)
     
     WEIGHT=$(cast call $STAKE_REGISTRY "weightOfOperatorForQuorum(uint8,address)(uint96)" 0 $OPERATOR_ADDRESS --rpc-url $RPC_URL)
     if [ $? -ne 0 ]; then
