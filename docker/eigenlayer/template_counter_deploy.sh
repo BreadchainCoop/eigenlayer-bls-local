@@ -7,10 +7,26 @@ set -Eeuo pipefail
 #   PRIVATE_KEY / FOUNDRY_PRIVATE_KEY – deployer key
 #   REGISTRY_COORDINATOR_ADDRESS – address used by CounterScript
 ###############################################################################
-: "${RPC_URL:?RPC_URL is not set}"
-: "${PRIVATE_KEY:=${FOUNDRY_PRIVATE_KEY:-}}"
-: "${PRIVATE_KEY:?PRIVATE_KEY (or FOUNDRY_PRIVATE_KEY) is not set}"
-: "${REGISTRY_COORDINATOR_ADDRESS:?REGISTRY_COORDINATOR_ADDRESS is not set}"
+
+if [ -z "$RPC_URL" ]; then
+  echo "Error: RPC_URL is not set in the environment variables."
+  exit 1
+fi
+
+if [ -z "$PRIVATE_KEY" ] && [ -z "$FOUNDRY_PRIVATE_KEY" ]; then
+  echo "Error: Neither PRIVATE_KEY nor FOUNDRY_PRIVATE_KEY is set in the environment variables."
+  exit 1
+fi
+
+if [ -z "$REGISTRY_COORDINATOR_ADDRESS" ]; then
+  echo "Error: REGISTRY_COORDINATOR_ADDRESS is not set in the environment variables."
+  exit 1
+fi
+
+# Use FOUNDRY_PRIVATE_KEY if PRIVATE_KEY is not set
+if [ -z "$PRIVATE_KEY" ]; then
+  PRIVATE_KEY="$FOUNDRY_PRIVATE_KEY"
+fi
 
 ###############################################################################
 # 1. Build + deploy BLSSigCheckOperatorStateRetriever
