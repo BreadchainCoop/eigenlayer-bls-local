@@ -32,10 +32,6 @@ fi
 # 1. Build + deploy BLSSigCheckOperatorStateRetriever
 ###############################################################################
 cd bls-middleware/contracts/lib/avs-commonware-counter \
-  && forge build > /dev/null 2>&1
-if [ $? -ne 0 ]; then
-  echo "Error: forge build failed"; exit 1
-fi
 
 forge script script/DeployBLSSigCheck.s.sol:DeployBLSSigCheckScript \
        --rpc-url "$RPC_URL"         \
