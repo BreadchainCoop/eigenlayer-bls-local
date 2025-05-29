@@ -29,6 +29,9 @@ if [ "$ENVIRONMENT" = "TESTNET" ]; then
 fi
 sleep 10
 
+echo "Deploying counter..."
+./counter.sh
+
 rm -rf $HOME/.nodes/operator_keys/*
 
 if [ -n "$TEST_ACCOUNTS" ]; then
