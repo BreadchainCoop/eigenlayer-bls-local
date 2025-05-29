@@ -22,7 +22,7 @@ COPY ./eject.sh /eject.sh
 RUN chmod +x /eject.sh
 COPY ./get_bls_key.sh /get_bls_key.sh
 RUN chmod +x /get_bls_key.sh
-COPY ./counter.sh /counter.sh
-RUN chmod +x /counter.sh
+COPY ./template_counter_deploy.sh /template_counter_deploy.sh
+RUN chmod +x /template_counter_deploy.sh
 
 ENTRYPOINT ["/main.sh"]

@@ -30,7 +30,7 @@ fi
 sleep 10
 
 echo "Deploying counter..."
-./counter.sh
+./template_counter_deploy.sh
 
 rm -rf $HOME/.nodes/operator_keys/*
 
