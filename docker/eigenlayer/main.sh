@@ -86,7 +86,7 @@ export REGISTRY_COORDINATOR_ADDRESS
 
 echo "Deploying counter..."
 cd /
-/template_counter_deploy.sh
+/counter_and_sig_check_deploy.sh
 
 cd /bls-middleware/contracts
 forge script script/UAMPermissions.s.sol --rpc-url $RPC_URL --broadcast --private-key $PRIVATE_KEY > /dev/null 2>&1
