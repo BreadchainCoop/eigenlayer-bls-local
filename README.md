@@ -13,19 +13,48 @@ Relies on [BLS-middleware](https://github.com/BreadchainCoop/bls-middleware)
    ```
    cp example.env .env
    ```
-   Make sure you have filled in all the variables 
+   Make sure you have filled in all the required variables. The environment variables are organized into several sections:
+
+   ### Mainnet/Holesky Configuration
+   Choose one set of addresses based on your target network:
    ```
-    DELEGATION_MANAGER_ADDRESS= # Depends on the desired ENV 
-    STRATEGY_MANAGER_ADDRESS=
-    REGISTRY_COORDINATOR_ADDRESS=
-    LST_CONTRACT_ADDRESS=
-    LST_STRATEGY_ADDRESS=
-    FORK_URL=
-    RPC_URL=http://ethereum:8545
-    WEBSOCKET_RPC_URL=ws://ethereum:8545
-    ENVIRONMENT= # Depends on the desired ENV 
-    MAX_OPERATOR_RETRY_ATTEMPTS=10
-    SERVER_PRIVATE_KEY= 
+   DELEGATION_MANAGER_ADDRESS=  # Address of the delegation manager contract
+   STRATEGY_MANAGER_ADDRESS=    # Address of the strategy manager contract
+   LST_CONTRACT_ADDRESS=        # Address of the LST contract
+   LST_STRATEGY_ADDRESS=        # Address of the LST strategy contract
+   BLS_SIGNATURE_CHECKER_ADDRESS= # Address of the BLS signature checker
+   OPERATOR_STATE_RETRIEVER_ADDRESS= # Address of the operator state retriever
+   ALLOCATION_MANAGER_ADDRESS=  # Address of the allocation manager
+   ```
+
+   ### Network Configuration
+   ```
+   FORK_URL=                    # URL of the RPC to fork from (Ethereum/Holesky)
+   RPC_URL=http://ethereum:8545 # Local RPC endpoint
+   WEBSOCKET_RPC_URL=ws://ethereum:8545 # Local WebSocket endpoint
+   ENVIRONMENT=LOCAL            # Environment mode (LOCAL or TESTNET)
+   ```
+
+   ### Operator Configuration
+   ```
+   MAX_OPERATOR_RETRY_ATTEMPTS=10 # Maximum number of retry attempts for operators
+   PRIVATE_KEY=                 # Private key for signing operations
+   SERVER_PRIVATE_KEY=          # Private key for server operations
+   MAX_TIME_DIFF_SECONDS=300    # Maximum allowed time difference in seconds
+   TEST_ACCOUNTS=3              # Number of test accounts to create
+   ```
+
+   ### Service Configuration
+   ```
+   CERBERUS_GRPC_PORT=50051     # Port for Cerberus gRPC service
+   CERBERUS_METRICS_PORT=9081   # Port for Cerberus metrics
+   SIGNER_ENDPOINT=http://signer:50051 # Endpoint for the signer service
+   ```
+
+   ### Optional Debug Configuration
+   ```
+   RUST_BACKTRACE=full          # Enable full backtrace for Rust errors
+   RUST_LOG=debug              # Set Rust logging level
    ```
 
 3. Build and start the services:
