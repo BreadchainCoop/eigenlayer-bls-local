@@ -31,7 +31,7 @@ fi
 ###############################################################################
 # 1. Build + deploy BLSSigCheckOperatorStateRetriever
 ###############################################################################
-cd bls-middleware/contracts/lib/avs-commonware-counter \
+cd /bls-middleware/contracts/lib/avs-commonware-counter
 
 forge script script/DeployBLSSigCheck.s.sol:DeployBLSSigCheckScript \
        --rpc-url "$RPC_URL"         \

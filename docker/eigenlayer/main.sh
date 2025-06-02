@@ -29,9 +29,6 @@ if [ "$ENVIRONMENT" = "TESTNET" ]; then
 fi
 sleep 10
 
-echo "Deploying counter..."
-./template_counter_deploy.sh
-
 rm -rf $HOME/.nodes/operator_keys/*
 
 if [ -n "$TEST_ACCOUNTS" ]; then
@@ -78,6 +75,22 @@ if [ $? -ne 0 ]; then
 fi
 cp script/deployments/incredible-squaring/$chain_id.json ~/.nodes/avs_deploy.json
 cp script/deployments/incredible-squaring/$chain_id.json avs_deploy.json
+
+# Get registry coordinator from deployment JSON if not set in environment
+if [ -z "$REGISTRY_COORDINATOR_ADDRESS" ]; then
+    REGISTRY_COORDINATOR_ADDRESS=$(cat avs_deploy.json | jq -r '.addresses.registryCoordinator')
+    if [ -z "$REGISTRY_COORDINATOR_ADDRESS" ] || [ "$REGISTRY_COORDINATOR_ADDRESS" = "null" ]; then
+        echo "Error: Failed to get registry coordinator address from deployment JSON"
+        exit 1
+    fi
+    export REGISTRY_COORDINATOR_ADDRESS
+fi
+
+echo "Deploying counter..."
+cd /
+/template_counter_deploy.sh
+
+cd /bls-middleware/contracts
 forge script script/UAMPermissions.s.sol --rpc-url $RPC_URL --broadcast --private-key $PRIVATE_KEY > /dev/null 2>&1
 if [ $? -ne 0 ]; then
     echo "Error: Failed to run UAMPermissions script"
