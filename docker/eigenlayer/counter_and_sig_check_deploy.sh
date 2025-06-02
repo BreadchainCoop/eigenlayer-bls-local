@@ -31,7 +31,7 @@ fi
 ###############################################################################
 # 1. Build + deploy BLSSigCheckOperatorStateRetriever
 ###############################################################################
-cd /bls-middleware/contracts/lib/avs-commonware-counter
+cd bls-middleware/contracts/lib/avs-commonware-counter
 
 forge script script/DeployBLSSigCheck.s.sol:DeployBLSSigCheckScript \
        --rpc-url "$RPC_URL"         \
@@ -55,6 +55,31 @@ if [ $? -ne 0 ]; then
   echo "Error: Failed to deploy Counter"; exit 1
 fi
 echo "Counter deployed"
+
+###############################################################################
+# 3. Merge deployment JSONs
+###############################################################################
+chain_id=$(cast chain-id --rpc-url $RPC_URL)
+if [ -f "script/deployments/bls-sig-check/$chain_id.json" ] && [ -f "script/deployments/counter/$chain_id.json" ]; then
+    # Read the deployment JSONs
+    bls_sig_check_json=$(cat "script/deployments/bls-sig-check/$chain_id.json")
+    counter_json=$(cat "script/deployments/counter/$chain_id.json")
+    
+    # Create temporary files in the current directory
+    echo "$bls_sig_check_json" > bls_sig_check.json
+    echo "$counter_json" > counter.json
+    
+    # Merge the JSONs with the existing avs_deploy.json
+    merged_json=$(jq -s '.[0] * .[1] * .[2]' ~/.nodes/avs_deploy.json bls_sig_check.json counter.json)
+    
+    # Save to both locations
+    echo "$merged_json" > ~/.nodes/avs_deploy.json
+    echo "$merged_json" > ../../avs_deploy.json
+    rm bls_sig_check.json counter.json
+else
+    echo "Error: Could not find deployment JSONs for BLS sig checker or Counter"
+    exit 1
+fi
 
 echo "-----------------------------------------------------------------"
 echo "Counter deploy and run complete"
