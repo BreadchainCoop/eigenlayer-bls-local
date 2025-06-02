@@ -75,6 +75,20 @@ if [ $? -ne 0 ]; then
 fi
 cp script/deployments/incredible-squaring/$chain_id.json ~/.nodes/avs_deploy.json
 cp script/deployments/incredible-squaring/$chain_id.json avs_deploy.json
+
+# Get the latest registry coordinator from deployment JSON
+REGISTRY_COORDINATOR_ADDRESS=$(cat avs_deploy.json | jq -r '.addresses.registryCoordinator')
+if [ -z "$REGISTRY_COORDINATOR_ADDRESS" ] || [ "$REGISTRY_COORDINATOR_ADDRESS" = "null" ]; then
+    echo "Error: Failed to get registry coordinator address from deployment JSON"
+    exit 1
+fi
+export REGISTRY_COORDINATOR_ADDRESS
+
+echo "Deploying counter..."
+cd /
+/counter_and_sig_check_deploy.sh
+
+cd /bls-middleware/contracts
 forge script script/UAMPermissions.s.sol --rpc-url $RPC_URL --broadcast --private-key $PRIVATE_KEY > /dev/null 2>&1
 if [ $? -ne 0 ]; then
     echo "Error: Failed to run UAMPermissions script"
@@ -143,7 +157,6 @@ for i in $(seq 1 $num_accounts); do
         echo "Error: Failed to get operator weight for quorum for operator $i"
         exit 1
     fi
-    
     echo "Operator $i weight in quorum 0: $WEIGHT"
 done
 
