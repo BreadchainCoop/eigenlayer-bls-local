@@ -70,7 +70,7 @@ if [ -f "script/deployments/bls-sig-check/$chain_id.json" ] && [ -f "script/depl
     echo "$counter_json" > counter.json
     
     # Merge the JSONs with the existing avs_deploy.json
-    merged_json=$(jq -s '.[0] * .[1] * .[2]' ~/.nodes/avs_deploy.json bls_sig_check.json counter.json)
+    merged_json=$(jq -s '.[0] * .[1] * .[2]' ~/.nodes/avs_deploy.json counter.json bls_sig_check.json)
     
     # Save to both locations
     echo "$merged_json" > ~/.nodes/avs_deploy.json
