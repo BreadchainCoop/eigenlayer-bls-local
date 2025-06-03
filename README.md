@@ -31,16 +31,13 @@ Relies on [BLS-middleware](https://github.com/BreadchainCoop/bls-middleware)
    ```
    FORK_URL=                    # URL of the RPC to fork from (Ethereum/Holesky)
    RPC_URL=http://ethereum:8545 # Local RPC endpoint
-   WEBSOCKET_RPC_URL=ws://ethereum:8545 # Local WebSocket endpoint
    ENVIRONMENT=LOCAL            # Environment mode (LOCAL or TESTNET)
    ```
 
    ### Operator Configuration
    ```
-   MAX_OPERATOR_RETRY_ATTEMPTS=10 # Maximum number of retry attempts for operators
    PRIVATE_KEY=                 # Private key for signing operations
-   SERVER_PRIVATE_KEY=          # Private key for server operations
-   MAX_TIME_DIFF_SECONDS=300    # Maximum allowed time difference in seconds
+   FUNDED_KEY=                  # Private key used for funding test accounts (required for TESTNET)
    TEST_ACCOUNTS=3              # Number of test accounts to create
    ```
 
@@ -59,9 +56,70 @@ Relies on [BLS-middleware](https://github.com/BreadchainCoop/bls-middleware)
 
 3. Build and start the services:
    ```
-   docker-compose up --build
+   # First, build the services with no cache
+   docker-compose build --no-cache
+   
+   # Then start the services
+   docker-compose up
    ```
 Note that the nodes and node selector only start up after the eigenlayer setup container has exited  
+
+## Running in TESTNET Mode
+
+To run the service in TESTNET mode (Holesky), follow these steps:
+
+1. Update your `.env` file with the following changes:
+
+   a. Change the environment to TESTNET:
+   ```
+   ENVIRONMENT=TESTNET
+   ```
+
+   b. Set up your RPC URLs:
+   ```
+   # Get a free RPC URL from providers like Infura, Alchemy, or QuickNode
+   FORK_URL=https://holesky.infura.io/v3/YOUR-PROJECT-ID
+   RPC_URL=https://holesky.infura.io/v3/YOUR-PROJECT-ID
+   ```
+
+   c. Uncomment and use the Holesky configuration addresses:
+   ```
+   DELEGATION_MANAGER_ADDRESS=0xA44151489861Fe9e3055d95adC98FbD462B948e7
+   STRATEGY_MANAGER_ADDRESS=0xdfB5f6CE42aAA7830E94ECFCcAd411beF4d4D5b6
+   LST_CONTRACT_ADDRESS=0x3F1c547b21f65e10480dE3ad8E19fAAC46C95034
+   LST_STRATEGY_ADDRESS=0x7D704507b76571a51d9caE8AdDAbBFd0ba0e63d3
+   BLS_SIGNATURE_CHECKER_ADDRESS=0xca249215e082e17c12bb3c4881839a3f883e5c6b
+   OPERATOR_STATE_RETRIEVER_ADDRESS=0xB4baAfee917fb4449f5ec64804217bccE9f46C67
+   ALLOCATION_MANAGER_ADDRESS=0x78469728304326CBc65f8f95FA756B0B73164462
+   ```
+
+   d. Set up your testnet keys:
+   ```
+   # Generate a new private key or use an existing one with testnet ETH
+   PRIVATE_KEY=your_private_key_here
+   FUNDED_KEY=your_funded_private_key_here
+   ```
+
+2. Get Testnet ETH:
+   - Visit the [Holesky Faucet](https://holesky-faucet.pk910.de/) to get testnet ETH
+   - Send some ETH to both your `PRIVATE_KEY` and `FUNDED_KEY` addresses
+   - You can check your balance using [Holesky Etherscan](https://holesky.etherscan.io/)
+
+3. Build and start the services:
+   ```
+   # First, build the services with no cache
+   docker-compose build --no-cache
+   
+   # Then start the services
+   docker-compose up
+   ```
+
+4. Monitor the deployment:
+   - The setup process will take longer in TESTNET mode due to real network conditions
+   - Check the logs for any errors or issues
+   - You can monitor transactions on [Holesky Etherscan](https://holesky.etherscan.io/)
+
+Note: Make sure you have enough testnet ETH in both your `PRIVATE_KEY` and `FUNDED_KEY` accounts before starting the deployment. The deployment process requires multiple transactions and will fail if there's insufficient balance.
 
 ## Services
 
