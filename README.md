@@ -95,7 +95,7 @@ To run the service in TESTNET mode (Holesky), follow these steps:
 
    d. Set up your testnet keys:
    ```
-   # Generate a new private key or use an existing one with testnet ETH
+   # Generate a new private key or use an existing one with testnet ETH (the funded key will be used to transfer money to the PRIVATE_KEY account)
    PRIVATE_KEY=your_private_key_here
    FUNDED_KEY=your_funded_private_key_here
    ```
