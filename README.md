@@ -78,8 +78,8 @@ To run the service in TESTNET mode (Holesky), follow these steps:
    b. Set up your RPC URLs:
    ```
    # It's reccomended to get a paid RPC URL for non-flakey behavior
-   FORK_URL=https://holesky.infura.io/v3/YOUR-PROJECT-ID
-   RPC_URL=https://holesky.infura.io/v3/YOUR-PROJECT-ID
+   FORK_URL=https://holesky.rpc # Not a real RPC
+   RPC_URL=https://holesky.rpc # Not a real RPC
    ```
 
    c. Uncomment and use the Holesky configuration addresses:
