@@ -82,7 +82,7 @@ To run the service in TESTNET mode (Holesky), follow these steps:
    RPC_URL=https://holesky.rpc # Not a real RPC
    ```
 
-   c. Uncomment and use the Holesky configuration addresses:
+   c. Uncomment and use the testnet configuration addresses (The following are the addresses for the Holesky Testnet):
    ```
    DELEGATION_MANAGER_ADDRESS=0xA44151489861Fe9e3055d95adC98FbD462B948e7
    STRATEGY_MANAGER_ADDRESS=0xdfB5f6CE42aAA7830E94ECFCcAd411beF4d4D5b6
