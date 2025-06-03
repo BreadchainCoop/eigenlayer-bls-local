@@ -30,7 +30,7 @@ Relies on [BLS-middleware](https://github.com/BreadchainCoop/bls-middleware)
    ### Network Configuration
    ```
    FORK_URL=                    # URL of the RPC to fork from (Ethereum/Holesky)
-   RPC_URL=http://ethereum:8545 # Local RPC endpoint
+   RPC_URL=http://ethereum:8545 # Local RPC endpoint, change to a live endpoint when running on testnet
    ENVIRONMENT=LOCAL            # Environment mode (LOCAL or TESTNET)
    ```
 
