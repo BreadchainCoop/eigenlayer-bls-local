@@ -105,9 +105,9 @@ To run the service in TESTNET mode (Holesky), follow these steps:
    - Send some ETH to both your `PRIVATE_KEY` and `FUNDED_KEY` addresses
    - You can check your balance using [Holesky Etherscan](https://holesky.etherscan.io/)
 
-3. Build and start the services:
+3. Build and start the services (assuming you have already built the images):
    ```
-   # First, build the services with no cache
+   # First, build the services with no cache (unless already built)
    docker-compose build --no-cache
    
    # Then start the services
