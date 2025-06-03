@@ -15,7 +15,7 @@ Relies on [BLS-middleware](https://github.com/BreadchainCoop/bls-middleware)
    ```
    Make sure you have filled in all the required variables. The environment variables are organized into several sections:
 
-   ### Mainnet/Holesky Configuration
+   ### Mainnet/Testnet Configuration
    Choose one set of addresses based on your target network:
    ```
    DELEGATION_MANAGER_ADDRESS=  # Address of the delegation manager contract
