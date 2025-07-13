@@ -1,9 +1,7 @@
 services:
   ethereum:
     platform: linux/amd64
-    build:
-      context: ./docker/ethereum
-      dockerfile: Dockerfile.ethereum
+    image: ghcr.io/breadchaincoop/ethereum:dev
     env_file:
       - .env
     ports:
@@ -11,9 +9,7 @@ services:
   
   eigenlayer:
     platform: linux/amd64
-    build:
-      context: ./docker/eigenlayer
-      dockerfile: Dockerfile.eigenlayer
+    image: ghcr.io/breadchaincoop/eigenlayer:dev
     depends_on:
       - ethereum
     env_file:
