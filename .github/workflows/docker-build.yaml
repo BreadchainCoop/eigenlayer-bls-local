@@ -1,4 +1,3 @@
-# .github/workflows/docker-build.yml
 name: Build & Push Docker Images
 
 permissions:
@@ -8,25 +7,44 @@ permissions:
 on:
   push:
     branches:
+      - main
       - dev
-      - k8s
+      - staging
     paths:
       - 'docker/eigenlayer/**'
       - 'docker/ethereum/**'
   workflow_dispatch:
 
 jobs:
-  build-images:
-    runs-on: ubuntu-latest
+  build-and-push:
+    runs-on: self-hosted
+    container:
+      image: docker:24.0.1-cli
+      options: >-
+        -v /var/run/docker.sock:/var/run/docker.sock
 
     steps:
       - name: Check out code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - name: Set up lowercase owner & short SHA
+      - name: Set build vars
+        id: vars
+        shell: sh
         run: |
-          echo "OWNER_LOWER=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
-          echo "SHORT_SHA=${GITHUB_SHA:0:7}" >> $GITHUB_ENV
+          OWNER_LOWER="$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
+          SHORT_SHA="$(echo "${GITHUB_SHA}" | cut -c1-7)"
+
+          # channel tag from branch
+          case "${GITHUB_REF_NAME}" in
+            main)    CHANNEL_TAG="latest"  ;;
+            dev)     CHANNEL_TAG="dev"     ;;
+            staging) CHANNEL_TAG="staging" ;;
+            *) echo "Unsupported branch: ${GITHUB_REF_NAME}"; exit 1 ;;
+          esac
+
+          echo "OWNER_LOWER=${OWNER_LOWER}"   >> "$GITHUB_ENV"
+          echo "SHORT_SHA=${SHORT_SHA}"       >> "$GITHUB_ENV"
+          echo "CHANNEL_TAG=${CHANNEL_TAG}"   >> "$GITHUB_ENV"
 
       - name: Detect which Dockerfiles changed
         id: changes
@@ -39,30 +57,58 @@ jobs:
               - 'docker/ethereum/**'
 
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build & Push Eigenlayer image
+      # ---------- Eigenlayer ----------
+      - name: Build eigenlayer (multi-tag)
         if: steps.changes.outputs.eigenlayer == 'true'
-        uses: docker/build-push-action@v3
-        with:
-          context: docker/eigenlayer
-          file: docker/eigenlayer/Dockerfile.eigenlayer
-          push: true
-          tags: |
-            ghcr.io/${{ env.OWNER_LOWER }}/eigenlayer:${{ github.ref_name }}
-            ghcr.io/${{ env.OWNER_LOWER }}/eigenlayer:${{ github.ref_name }}-${{ env.SHORT_SHA }}
+        shell: sh
+        run: |
+          IMAGE="ghcr.io/${OWNER_LOWER}/eigenlayer"
+          echo "Building ${IMAGE}:${CHANNEL_TAG}"
+          docker build \
+            --label org.opencontainers.image.revision="${GITHUB_SHA}" \
+            --label org.opencontainers.image.source="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" \
+            -t "${IMAGE}:${CHANNEL_TAG}" \
+            -t "${IMAGE}:${CHANNEL_TAG}-${SHORT_SHA}" \
+            -f docker/eigenlayer/Dockerfile.eigenlayer \
+            docker/eigenlayer
 
-      - name: Build & Push Ethereum image
+      - name: Push eigenlayer tags
+        if: steps.changes.outputs.eigenlayer == 'true'
+        shell: sh
+        run: |
+          IMAGE="ghcr.io/${OWNER_LOWER}/eigenlayer"
+          for TAG in "${CHANNEL_TAG}" "${CHANNEL_TAG}-${SHORT_SHA}"; do
+            echo "Pushing ${IMAGE}:${TAG}"
+            docker push "${IMAGE}:${TAG}"
+          done
+
+      # ---------- Ethereum ----------
+      - name: Build ethereum (multi-tag)
         if: steps.changes.outputs.ethereum == 'true'
-        uses: docker/build-push-action@v3
-        with:
-          context: .
-          file: docker/ethereum/Dockerfile.ethereum
-          push: true
-          tags: |
-            ghcr.io/${{ env.OWNER_LOWER }}/ethereum:${{ github.ref_name }}
-            ghcr.io/${{ env.OWNER_LOWER }}/ethereum:${{ github.ref_name }}-${{ env.SHORT_SHA }}
+        shell: sh
+        run: |
+          IMAGE="ghcr.io/${OWNER_LOWER}/ethereum"
+          echo "Building ${IMAGE}:${CHANNEL_TAG}"
+          docker build \
+            --label org.opencontainers.image.revision="${GITHUB_SHA}" \
+            --label org.opencontainers.image.source="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" \
+            -t "${IMAGE}:${CHANNEL_TAG}" \
+            -t "${IMAGE}:${CHANNEL_TAG}-${SHORT_SHA}" \
+            -f docker/ethereum/Dockerfile.ethereum \
+            .
+
+      - name: Push ethereum tags
+        if: steps.changes.outputs.ethereum == 'true'
+        shell: sh
+        run: |
+          IMAGE="ghcr.io/${OWNER_LOWER}/ethereum"
+          for TAG in "${CHANNEL_TAG}" "${CHANNEL_TAG}-${SHORT_SHA}"; do
+            echo "Pushing ${IMAGE}:${TAG}"
+            docker push "${IMAGE}:${TAG}"
+          done
