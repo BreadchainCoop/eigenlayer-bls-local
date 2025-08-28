@@ -16,12 +16,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-and-push:
-    runs-on: self-hosted
-    container:
-      image: docker:24.0.1-cli
-      options: >-
-        -v /var/run/docker.sock:/var/run/docker.sock
+  build-images: 
+    runs-on: ubuntu-latest
 
     steps:
       - name: Check out code
