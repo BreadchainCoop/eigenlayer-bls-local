@@ -67,8 +67,8 @@ jobs:
           IMAGE="ghcr.io/${OWNER_LOWER}/eigenlayer"
           echo "Building ${IMAGE}:${CHANNEL_TAG}"
           docker build \
-            --label org.opencontainers.image.revision="${GITHUB_SHA}" \
-            --label org.opencontainers.image.source="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" \
+            --label breadchaincoop.eigenlayer.image.revision="${GITHUB_SHA}" \
+            --label breadchaincoop.eigenlayer.image.source="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" \
             -t "${IMAGE}:${CHANNEL_TAG}" \
             -t "${IMAGE}:${CHANNEL_TAG}-${SHORT_SHA}" \
             -f docker/eigenlayer/Dockerfile.eigenlayer \
@@ -92,8 +92,8 @@ jobs:
           IMAGE="ghcr.io/${OWNER_LOWER}/ethereum"
           echo "Building ${IMAGE}:${CHANNEL_TAG}"
           docker build \
-            --label org.opencontainers.image.revision="${GITHUB_SHA}" \
-            --label org.opencontainers.image.source="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" \
+            --label breadchaincoop.ethereum.image.revision="${GITHUB_SHA}" \
+            --label breadchaincoop.ethereum.image.source="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" \
             -t "${IMAGE}:${CHANNEL_TAG}" \
             -t "${IMAGE}:${CHANNEL_TAG}-${SHORT_SHA}" \
             -f docker/ethereum/Dockerfile.ethereum \
