@@ -81,8 +81,30 @@ if [ $? -ne 0 ]; then
     echo "Error: Failed to create bls key for $new_account"
     exit 1
 fi
-private_bls_key=$(./get_bls_key.sh $password $new_account)
-if [ $? -ne 0 ]; then
+
+# Extract BLS private key using tmux automation
+# Create a new tmux session
+tmux new-session -d -s export_key
+
+# Send the export command
+tmux send-keys -t export_key "eigenlayer keys export --key-type bls $new_account" C-m
+
+# Wait a bit and send "y"
+sleep 1
+tmux send-keys -t export_key "y" C-m
+
+# Wait a bit and send password
+sleep 1
+tmux send-keys -t export_key "$password" C-m
+
+# Capture the output and format it
+sleep 1
+private_bls_key=$(tmux capture-pane -t export_key -S - -E - -p | grep -A1 "Private key:" | tr -d 'Private key: \n')
+
+# Kill the session
+tmux kill-session -t export_key
+
+if [ -z "$private_bls_key" ]; then
     echo "Error: Failed to get bls key for $new_account"
     exit 1
 fi

@@ -9,7 +9,7 @@ Relies on [BLS-middleware](https://github.com/BreadchainCoop/bls-middleware)
 
 ## Setup
 
-2. Create a `.env` file in the root directory and add the following environment variables:
+1. Create a `.env` file in the root directory and add the following environment variables:
    ```
    cp example.env .env
    ```
@@ -54,7 +54,7 @@ Relies on [BLS-middleware](https://github.com/BreadchainCoop/bls-middleware)
    RUST_LOG=debug              # Set Rust logging level
    ```
 
-3. Build and start the services:
+2. Build and start the services:
    ```
    # First, build the services with no cache
    docker-compose build --no-cache

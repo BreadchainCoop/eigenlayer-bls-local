@@ -1,23 +1,26 @@
 services:
   ethereum:
     platform: linux/amd64
-    image: ghcr.io/breadchaincoop/ethereum:dev
+    build:
+      context: .
+      dockerfile: docker/ethereum/Dockerfile
     env_file:
       - .env
     ports:
       - "8545:8545"
-  
+
   eigenlayer:
     platform: linux/amd64
-    image: ghcr.io/breadchaincoop/eigenlayer:dev
+    build:
+      context: .
+      dockerfile: docker/eigenlayer/Dockerfile
     depends_on:
       - ethereum
     env_file:
       - .env
     volumes:
       - ./.nodes:/root/.nodes
-      - ./docker/eigenlayer/config.json:/bls-middleware/contracts/docker/eigenlayer/config.json
-  
+
   signer:
     image: ghcr.io/layr-labs/cerberus:0.0.2
     platform: linux/amd64
