@@ -153,9 +153,7 @@ if [ $? -ne 0 ]; then
 fi
 echo "BLSSigCheckOperatorStateRetriever deployed"
 
-###############################################################################
 # Deploy Counter
-###############################################################################
 echo "Deploying Counter..."
 
 forge script script/Counter.s.sol:CounterScript \
@@ -168,9 +166,7 @@ if [ $? -ne 0 ]; then
 fi
 echo "Counter deployed"
 
-###############################################################################
 # Deploy ArraySummation
-###############################################################################
 echo "Deploying ArraySummation..."
 
 # Get the AVS address and BLS sig check address from deployment JSONs
@@ -248,11 +244,10 @@ if [ $? -ne 0 ] || [ -z "$ARRAY_SUMMATION_ADDRESS" ] || [ "$ARRAY_SUMMATION_ADDR
     exit 1
 fi
 
-echo "ArraySummation deployed at: $ARRAY_SUMMATION_ADDRESS"
+echo "ArraySummation deployed"
+echo "Contract deployment and run complete"
 
-###############################################################################
 # Merge deployment JSONs
-###############################################################################
 chain_id=$(cast chain-id --rpc-url $RPC_URL)
 if [ -f "script/deployments/bls-sig-check/$chain_id.json" ] && [ -f "script/deployments/counter/$chain_id.json" ]; then
     # Read the deployment JSONs
@@ -281,15 +276,14 @@ else
     exit 1
 fi
 
-echo "-----------------------------------------------------------------"
-echo "Counter deploy and run complete"
-echo "-----------------------------------------------------------------"
-
+# Setup middleware
 cd /bls-middleware/contracts
+
 forge script script/UAMPermissions.s.sol --rpc-url $RPC_URL --broadcast --private-key $PRIVATE_KEY > /dev/null 2>&1
 if [ $? -ne 0 ]; then
     echo "Error: Failed to run UAMPermissions script"
 fi
+
 forge script script/SetupMiddleware.s.sol --rpc-url $RPC_URL --broadcast --private-key $PRIVATE_KEY > /dev/null 2>&1
 if [ $? -ne 0 ]; then
     echo "Error: Failed to run SetupMiddleware script"
@@ -302,6 +296,7 @@ if [ -z "$STAKE_REGISTRY" ] || [ "$STAKE_REGISTRY" = "null" ]; then
     exit 1
 fi
 
+# Register operators
 for i in $(seq 1 $num_accounts); do
     echo "Processing operator $i..."
     

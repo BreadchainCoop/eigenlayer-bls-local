@@ -70,17 +70,13 @@ ecdsa_keystore_path="${HOME}/.nodes/operator_keys/${new_account}.ecdsa.key.json"
 bls_keystore_path="${HOME}/.nodes/operator_keys/${new_account}.bls.key.json"
 password="Testacc1Testacc1"
 
-echo $password | eigenlayer keys import --insecure --key-type ecdsa $new_account $PRIVATE_KEY  >  /dev/null 2>&1
-if [ $? -ne 0 ]; then
-    echo "Error: Failed to import ecdsa key for $new_account"
-    exit 1
-fi
+# Import ECDSA key
+echo $password | eigenlayer keys import --insecure --key-type ecdsa $new_account $PRIVATE_KEY
+
 cp $HOME/.eigenlayer/operator_keys/${new_account}.ecdsa.key.json $HOME/.nodes/operator_keys/${new_account}.ecdsa.key.json
-echo $password |  eigenlayer keys create --key-type bls --insecure $new_account >  /dev/null 2>&1
-if [ $? -ne 0 ]; then
-    echo "Error: Failed to create bls key for $new_account"
-    exit 1
-fi
+
+# Create BLS key
+echo $password |  eigenlayer keys create --key-type bls --insecure $new_account
 
 # Extract BLS private key using tmux automation
 # Create a new tmux session
@@ -99,21 +95,23 @@ tmux send-keys -t export_key "$password" C-m
 
 # Capture the output and format it
 sleep 1
-private_bls_key=$(tmux capture-pane -t export_key -S - -E - -p | grep -A1 "Private key:" | tr -d 'Private key: \n')
+private_bls_key=$(tmux capture-pane -t export_key -S - -E - -p 2>/dev/null | grep -A1 "Private key:" | tr -d 'Private key: \n')
 
 # Kill the session
-tmux kill-session -t export_key
+tmux kill-session -t export_key 2>/dev/null || true
 
 if [ -z "$private_bls_key" ]; then
     echo "Error: Failed to get bls key for $new_account"
     exit 1
 fi
+
 result=$(grpcurl -plaintext -d '{"privateKey": "'"$private_bls_key"'", "password": "'"$password"'"}' signer:50051  keymanager.v1.KeyManager/ImportKey | jq -r '.publicKey' | tr -d '\n')
 if [ $? -ne 0 ]; then
     echo "Error: Failed to import bls key for $new_account"
     echo $result
     exit 1
 fi
+
 echo -n $result > $HOME/.nodes/operator_keys/${new_account}.bls.identifier
 echo -n "{\"privateKey\":\"$private_bls_key\"}" > $HOME/.nodes/operator_keys/${new_account}.private.bls.key.json
 echo -n "{\"privateKey\":\"$PRIVATE_KEY\",\"publicKey\":\"$ADDRESS\"}" > $HOME/.nodes/operator_keys/${new_account}.private.ecdsa.key.json
