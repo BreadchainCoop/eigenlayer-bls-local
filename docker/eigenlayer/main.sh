@@ -37,15 +37,20 @@ if [ -z "$PRIVATE_KEY" ]; then
 fi
 
 # Set default values for ArraySummation deployment parameters
-if [ -z "$ARRAY_SIZE" ]; then
-  ARRAY_SIZE=1000
+if [ -z "$ARRAY_SUMMATION_ARRAY_SIZE" ]; then
+  ARRAY_SUMMATION_ARRAY_SIZE=1000
 fi
-if [ -z "$MAX_VALUE" ]; then
-  MAX_VALUE=10000
+if [ -z "$ARRAY_SUMMATION_MAX_VALUE" ]; then
+  ARRAY_SUMMATION_MAX_VALUE=10000
 fi
-if [ -z "$SEED" ]; then
-  SEED=0
+if [ -z "$ARRAY_SUMMATION_SEED" ]; then
+  ARRAY_SUMMATION_SEED=0
 fi
+
+# Use shorter variable names for convenience
+ARRAY_SIZE=$ARRAY_SUMMATION_ARRAY_SIZE
+MAX_VALUE=$ARRAY_SUMMATION_MAX_VALUE
+SEED=$ARRAY_SUMMATION_SEED
 
 if [ "$ENVIRONMENT" = "TESTNET" ]; then
   if [ -z "$FUNDED_KEY" ]; then
