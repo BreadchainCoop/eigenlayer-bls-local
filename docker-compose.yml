@@ -20,6 +20,7 @@ services:
       - .env
     volumes:
       - ./.nodes:/root/.nodes
+      - ./docker/eigenlayer/config.json:/bls-middleware/contracts/docker/eigenlayer/config.json
 
   signer:
     image: ghcr.io/layr-labs/cerberus:0.0.2
