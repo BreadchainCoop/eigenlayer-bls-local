@@ -78,30 +78,54 @@ cp $HOME/.eigenlayer/operator_keys/${new_account}.ecdsa.key.json $HOME/.nodes/op
 # Create BLS key
 echo $password |  eigenlayer keys create --key-type bls --insecure $new_account
 
-# Extract BLS private key using tmux automation
-# Create a new tmux session
-tmux new-session -d -s export_key
+# Extract BLS private key using direct export first, fallback to tmux
+if command -v script >/dev/null 2>&1; then
+    script_output="/tmp/bls_export_$$.log"
+    echo -e "y\n$password" | script -q -c "timeout 10 eigenlayer keys export --key-type bls $new_account" "$script_output" >/dev/null 2>&1
 
-# Send the export command
-tmux send-keys -t export_key "eigenlayer keys export --key-type bls $new_account" C-m
+    if [ -f "$script_output" ]; then
+        private_bls_key=$(cat "$script_output" | grep -E '[0-9a-fA-F]{64,}' | head -1 | tr -d '[:space:]')
+    fi
+    rm -f "$script_output"
+fi
 
-# Wait a bit and send "y"
-sleep 1
-tmux send-keys -t export_key "y" C-m
+# Fallback to tmux method if direct export failed
+if [ -z "$private_bls_key" ]; then
+    # Create a new tmux session
+    tmux new-session -d -s export_key
 
-# Wait a bit and send password
-sleep 1
-tmux send-keys -t export_key "$password" C-m
+    # Send the export command
+    tmux send-keys -t export_key "eigenlayer keys export --key-type bls $new_account" C-m
 
-# Capture the output and format it
-sleep 1
-private_bls_key=$(tmux capture-pane -t export_key -S - -E - -p 2>/dev/null | grep -A1 "Private key:" | tr -d 'Private key: \n')
+    # Wait a bit and send "y"
+    sleep 1
+    tmux send-keys -t export_key "y" C-m
 
-# Kill the session
-tmux kill-session -t export_key 2>/dev/null || true
+    # Wait a bit and send password
+    sleep 1
+    tmux send-keys -t export_key "$password" C-m
+fi
+
+# Capture the output and format it (only if using tmux method)
+if [ -z "$private_bls_key" ]; then
+    sleep 3  # Increased wait time for key output
+    tmux_output=$(tmux capture-pane -t export_key -S - -E - -p 2>/dev/null)
+    private_bls_key=$(echo "$tmux_output" | grep -A 5 "Private key:" | grep -v "Private key:" | grep -E '^[0-9a-fA-F]+$' | head -1 | tr -d '[:space:]')
+
+    # Also try alternative patterns in case the output format is different
+    if [ -z "$private_bls_key" ]; then
+        private_bls_key=$(echo "$tmux_output" | grep -E '[0-9a-fA-F]{64,}' | head -1 | tr -d '[:space:]')
+    fi
+
+
+    # Kill the session
+    tmux kill-session -t export_key 2>/dev/null || true
+fi
 
 if [ -z "$private_bls_key" ]; then
-    echo "Error: Failed to get bls key for $new_account"
+    echo "Error: Failed to extract BLS private key for $new_account"
+    echo "BLS key file exists at: $HOME/.eigenlayer/operator_keys/${new_account}.bls.key.json"
+    echo "Try running the container again or check the eigenlayer CLI version"
     exit 1
 fi
 
