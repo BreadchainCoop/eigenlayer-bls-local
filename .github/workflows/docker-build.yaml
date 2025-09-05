@@ -17,7 +17,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-images: 
+  build-images:
     runs-on: ubuntu-latest
 
     steps:
@@ -73,7 +73,7 @@ jobs:
             -t "${IMAGE}:${CHANNEL_TAG}" \
             -t "${IMAGE}:${CHANNEL_TAG}-${SHORT_SHA}" \
             -f docker/eigenlayer/Dockerfile \
-            docker/eigenlayer
+            .
 
       - name: Push eigenlayer tags
         if: steps.changes.outputs.eigenlayer == 'true'
