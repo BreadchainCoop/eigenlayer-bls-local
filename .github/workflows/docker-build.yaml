@@ -11,6 +11,7 @@ on:
       - dev
       - staging
     paths:
+      - '.github/workflows/**'
       - 'docker/eigenlayer/**'
       - 'docker/ethereum/**'
   workflow_dispatch:
