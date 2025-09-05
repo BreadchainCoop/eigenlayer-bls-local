@@ -71,7 +71,7 @@ jobs:
             --label breadchaincoop.eigenlayer.image.source="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" \
             -t "${IMAGE}:${CHANNEL_TAG}" \
             -t "${IMAGE}:${CHANNEL_TAG}-${SHORT_SHA}" \
-            -f docker/eigenlayer/Dockerfile.eigenlayer \
+            -f docker/eigenlayer/Dockerfile \
             docker/eigenlayer
 
       - name: Push eigenlayer tags
@@ -96,7 +96,7 @@ jobs:
             --label breadchaincoop.ethereum.image.source="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" \
             -t "${IMAGE}:${CHANNEL_TAG}" \
             -t "${IMAGE}:${CHANNEL_TAG}-${SHORT_SHA}" \
-            -f docker/ethereum/Dockerfile.ethereum \
+            -f docker/ethereum/Dockerfile \
             .
 
       - name: Push ethereum tags
