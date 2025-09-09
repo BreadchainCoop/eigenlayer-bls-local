@@ -87,48 +87,38 @@ echo "[register] Creating BLS key for $new_account..."
 echo $password |  eigenlayer keys create --key-type bls --insecure $new_account
 
 echo "[register] Exporting BLS private key (with retries)..."
-# Extract BLS private key with retries: try non-interactive first, then interactive via tmux
+# Extract BLS private key using tmux-based interactive export with retries
 private_bls_key=""
 attempt=1
 max_attempts=5
 while [ -z "$private_bls_key" ] && [ $attempt -le $max_attempts ]; do
     echo "[register] BLS export attempt $attempt of $max_attempts"
-    # Try non-interactive export using `script` if available
-    if command -v script >/dev/null 2>&1; then
-        script_output="/tmp/bls_export_$$.$attempt.log"
-        echo "[register] Trying non-interactive export via script..."
-        printf "y\n%s\n" "$password" | script -q -c "timeout 15 eigenlayer keys export --key-type bls $new_account" "$script_output" >/dev/null 2>&1
-        if [ -f "$script_output" ]; then
-            private_bls_key=$(grep -Eo '[0-9a-fA-F]{64,}' "$script_output" | head -1 | tr -d '[:space:]')
-            rm -f "$script_output"
+    
+    # Clean up any existing tmux session
+    tmux has-session -t export_key 2>/dev/null && tmux kill-session -t export_key >/dev/null 2>&1
+    
+    # Create new tmux session and run export command
+    tmux new-session -d -s export_key
+    tmux send-keys -t export_key "eigenlayer keys export --key-type bls $new_account" C-m
+    sleep 1
+    tmux send-keys -t export_key "y" C-m
+    sleep 1
+    tmux send-keys -t export_key "$password" C-m
+
+    # Poll for output with incremental waits
+    waited=0
+    while [ $waited -lt 12 ] && [ -z "$private_bls_key" ]; do
+        sleep 2
+        waited=$((waited + 2))
+        tmux_output=$(tmux capture-pane -t export_key -S - -E - -p 2>/dev/null)
+        private_bls_key=$(printf "%s\n" "$tmux_output" | awk '/Private key:/{getline; print; exit}' | tr -d '[:space:]')
+        if [ -z "$private_bls_key" ]; then
+            private_bls_key=$(printf "%s\n" "$tmux_output" | grep -Eo '[0-9a-fA-F]{64,}' | head -1 | tr -d '[:space:]')
         fi
-    fi
+    done
 
-    # If still not found, fall back to tmux-based interactive export
-    if [ -z "$private_bls_key" ]; then
-        echo "[register] Falling back to tmux-based export..."
-        tmux has-session -t export_key 2>/dev/null && tmux kill-session -t export_key >/dev/null 2>&1
-        tmux new-session -d -s export_key
-        tmux send-keys -t export_key "eigenlayer keys export --key-type bls $new_account" C-m
-        sleep 1
-        tmux send-keys -t export_key "y" C-m
-        sleep 1
-        tmux send-keys -t export_key "$password" C-m
-
-        # Poll for output with incremental waits
-        waited=0
-        while [ $waited -lt 12 ] && [ -z "$private_bls_key" ]; do
-            sleep 2
-            waited=$((waited + 2))
-            tmux_output=$(tmux capture-pane -t export_key -S - -E - -p 2>/dev/null)
-            private_bls_key=$(printf "%s\n" "$tmux_output" | awk '/Private key:/{getline; print; exit}' | tr -d '[:space:]')
-            if [ -z "$private_bls_key" ]; then
-                private_bls_key=$(printf "%s\n" "$tmux_output" | grep -Eo '[0-9a-fA-F]{64,}' | head -1 | tr -d '[:space:]')
-            fi
-        done
-
-        tmux kill-session -t export_key 2>/dev/null || true
-    fi
+    # Clean up tmux session
+    tmux kill-session -t export_key 2>/dev/null || true
 
     if [ -z "$private_bls_key" ]; then
         echo "[register] Export attempt $attempt failed; retrying..."
