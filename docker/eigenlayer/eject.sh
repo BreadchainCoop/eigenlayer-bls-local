@@ -1,4 +1,5 @@
 #!/bin/sh
+
 if [ -z "$REGISTRY_COORDINATOR_ADDRESS" ]; then
   echo "Error: REGISTRY_COORDINATOR_ADDRESS is not set in the environment variables."
   exit 1

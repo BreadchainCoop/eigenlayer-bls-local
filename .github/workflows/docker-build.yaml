@@ -11,12 +11,13 @@ on:
       - dev
       - staging
     paths:
+      - '.github/workflows/**'
       - 'docker/eigenlayer/**'
       - 'docker/ethereum/**'
   workflow_dispatch:
 
 jobs:
-  build-images: 
+  build-images:
     runs-on: ubuntu-latest
 
     steps:
@@ -71,8 +72,8 @@ jobs:
             --label breadchaincoop.eigenlayer.image.source="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" \
             -t "${IMAGE}:${CHANNEL_TAG}" \
             -t "${IMAGE}:${CHANNEL_TAG}-${SHORT_SHA}" \
-            -f docker/eigenlayer/Dockerfile.eigenlayer \
-            docker/eigenlayer
+            -f docker/eigenlayer/Dockerfile \
+            .
 
       - name: Push eigenlayer tags
         if: steps.changes.outputs.eigenlayer == 'true'
@@ -96,7 +97,7 @@ jobs:
             --label breadchaincoop.ethereum.image.source="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" \
             -t "${IMAGE}:${CHANNEL_TAG}" \
             -t "${IMAGE}:${CHANNEL_TAG}-${SHORT_SHA}" \
-            -f docker/ethereum/Dockerfile.ethereum \
+            -f docker/ethereum/Dockerfile \
             .
 
       - name: Push ethereum tags

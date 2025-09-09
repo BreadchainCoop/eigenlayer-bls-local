@@ -21,6 +21,16 @@ if [ -z "$RPC_URL" ]; then
   exit 1
 fi
 
+if [ -z "$PRIVATE_KEY" ] && [ -z "$FOUNDRY_PRIVATE_KEY" ]; then
+  echo "Error: Neither PRIVATE_KEY nor FOUNDRY_PRIVATE_KEY is set in the environment variables."
+  exit 1
+fi
+
+# Use FOUNDRY_PRIVATE_KEY if PRIVATE_KEY is not set
+if [ -z "$PRIVATE_KEY" ]; then
+  PRIVATE_KEY="$FOUNDRY_PRIVATE_KEY"
+fi
+
 if [ "$ENVIRONMENT" = "TESTNET" ]; then
   if [ -z "$FUNDED_KEY" ]; then
     echo "Error: FUNDED_KEY is not set in the environment variables. This is required for testnet."
@@ -77,34 +87,114 @@ cp script/deployments/incredible-squaring/$chain_id.json ~/.nodes/avs_deploy.jso
 cp script/deployments/incredible-squaring/$chain_id.json avs_deploy.json
 
 # Get the latest registry coordinator from deployment JSON
-REGISTRY_COORDINATOR_ADDRESS=$(cat avs_deploy.json | jq -r '.addresses.registryCoordinator')
+REGISTRY_COORDINATOR_ADDRESS=$(cat ~/.nodes/avs_deploy.json | jq -r '.addresses.registryCoordinator')
 if [ -z "$REGISTRY_COORDINATOR_ADDRESS" ] || [ "$REGISTRY_COORDINATOR_ADDRESS" = "null" ]; then
     echo "Error: Failed to get registry coordinator address from deployment JSON"
     exit 1
 fi
 export REGISTRY_COORDINATOR_ADDRESS
 
-echo "Deploying counter..."
-cd /
-/counter_and_sig_check_deploy.sh
+###############################################################################
+# Deploy BLS Signature Check
+###############################################################################
+echo "Deploying BLSSigCheckOperatorStateRetriever..."
 
+# Debug: Check if the directory exists and what's in it
+echo "Checking bls-middleware directory structure..."
+if [ ! -d "/bls-middleware" ]; then
+  echo "Error: /bls-middleware directory not found"
+  exit 1
+fi
+
+if [ ! -d "/bls-middleware/contracts" ]; then
+  echo "Error: /bls-middleware/contracts directory not found"
+  ls -la /bls-middleware/
+  exit 1
+fi
+
+if [ ! -d "/bls-middleware/contracts/lib" ]; then
+  echo "Error: /bls-middleware/contracts/lib directory not found"
+  ls -la /bls-middleware/contracts/
+  exit 1
+fi
+
+if [ ! -d "/bls-middleware/contracts/lib/avs-commonware-counter" ]; then
+  echo "Error: /bls-middleware/contracts/lib/avs-commonware-counter directory not found"
+  ls -la /bls-middleware/contracts/lib/
+  exit 1
+fi
+
+cd /bls-middleware/contracts/lib/avs-commonware-counter
+echo "Successfully changed to avs-commonware-counter directory"
+
+forge script script/DeployBLSSigCheck.s.sol:DeployBLSSigCheckScript \
+       --rpc-url "$RPC_URL"         \
+       --private-key "$PRIVATE_KEY" \
+       --broadcast                  \
+       > /dev/null 2>&1
+if [ $? -ne 0 ]; then
+  echo "Error: Failed to deploy BLSSigCheckOperatorStateRetriever"; exit 1
+fi
+echo "BLSSigCheckOperatorStateRetriever deployed"
+
+# Deploy Counter
+echo "Deploying Counter..."
+
+forge script script/Counter.s.sol:CounterScript \
+       --rpc-url "$RPC_URL"         \
+       --private-key "$PRIVATE_KEY" \
+       --broadcast                  \
+       > /dev/null 2>&1
+if [ $? -ne 0 ]; then
+  echo "Error: Failed to deploy Counter"; exit 1
+fi
+echo "Counter deployed"
+echo "Contract deployment and run complete"
+
+# Merge deployment JSONs
+chain_id=$(cast chain-id --rpc-url $RPC_URL)
+if [ -f "script/deployments/bls-sig-check/$chain_id.json" ] && [ -f "script/deployments/counter/$chain_id.json" ]; then
+    # Read the deployment JSONs
+    bls_sig_check_json=$(cat "script/deployments/bls-sig-check/$chain_id.json")
+    counter_json=$(cat "script/deployments/counter/$chain_id.json")
+
+    # Create temporary files in the current directory
+    echo "$bls_sig_check_json" > bls_sig_check.json
+    echo "$counter_json" > counter.json
+
+    # Merge the JSONs with the existing avs_deploy.json
+    merged_json=$(jq -s '.[0] * .[1] * .[2]' ~/.nodes/avs_deploy.json counter.json bls_sig_check.json)
+
+    # Save to both locations
+    echo "$merged_json" > ~/.nodes/avs_deploy.json
+    echo "$merged_json" > ../../avs_deploy.json
+    rm bls_sig_check.json counter.json
+else
+    echo "Error: Could not find deployment JSONs for BLS sig checker or Counter"
+    exit 1
+fi
+
+# Setup middleware
 cd /bls-middleware/contracts
+
 forge script script/UAMPermissions.s.sol --rpc-url $RPC_URL --broadcast --private-key $PRIVATE_KEY > /dev/null 2>&1
 if [ $? -ne 0 ]; then
     echo "Error: Failed to run UAMPermissions script"
 fi
+
 forge script script/SetupMiddleware.s.sol --rpc-url $RPC_URL --broadcast --private-key $PRIVATE_KEY > /dev/null 2>&1
 if [ $? -ne 0 ]; then
     echo "Error: Failed to run SetupMiddleware script"
 fi
 
 # Get stake registry address once
-STAKE_REGISTRY=$(cat avs_deploy.json | jq -r '.addresses.stakeRegistry')
+STAKE_REGISTRY=$(cat ~/.nodes/avs_deploy.json | jq -r '.addresses.stakeRegistry')
 if [ -z "$STAKE_REGISTRY" ] || [ "$STAKE_REGISTRY" = "null" ]; then
     echo "Error: Failed to get stake registry address from deployment JSON"
     exit 1
 fi
 
+# Register operators
 for i in $(seq 1 $num_accounts); do
     echo "Processing operator $i..."
     
