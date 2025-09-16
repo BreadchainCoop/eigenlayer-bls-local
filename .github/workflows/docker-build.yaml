@@ -14,6 +14,13 @@ on:
       - '.github/workflows/**'
       - 'docker/eigenlayer/**'
       - 'docker/ethereum/**'
+  pull_request:
+    branches:
+      - dev
+    paths:
+      - '.github/workflows/**'
+      - 'docker/eigenlayer/**'
+      - 'docker/ethereum/**'
   workflow_dispatch:
 
 jobs:
@@ -31,13 +38,21 @@ jobs:
           OWNER_LOWER="$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
           SHORT_SHA="$(echo "${GITHUB_SHA}" | cut -c1-7)"
 
-          # channel tag from branch
-          case "${GITHUB_REF_NAME}" in
-            main)    CHANNEL_TAG="latest"  ;;
-            dev)     CHANNEL_TAG="dev"     ;;
-            staging) CHANNEL_TAG="staging" ;;
-            *) echo "Unsupported branch: ${GITHUB_REF_NAME}"; exit 1 ;;
-          esac
+          # Determine if this is a pull request
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            # For PRs, use the branch name as the tag
+            BRANCH_NAME="${{ github.head_ref }}"
+            # Sanitize branch name for use as Docker tag (replace / with -)
+            CHANNEL_TAG="pr-$(echo "${BRANCH_NAME}" | sed 's/[^a-zA-Z0-9._-]/-/g')"
+          else
+            # For pushes, use channel tag from branch
+            case "${GITHUB_REF_NAME}" in
+              main)    CHANNEL_TAG="latest"  ;;
+              dev)     CHANNEL_TAG="dev"     ;;
+              staging) CHANNEL_TAG="staging" ;;
+              *) echo "Unsupported branch: ${GITHUB_REF_NAME}"; exit 1 ;;
+            esac
+          fi
 
           echo "OWNER_LOWER=${OWNER_LOWER}"   >> "$GITHUB_ENV"
           echo "SHORT_SHA=${SHORT_SHA}"       >> "$GITHUB_ENV"
@@ -59,6 +74,18 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Output image info for PR
+        if: github.event_name == 'pull_request'
+        shell: sh
+        run: |
+          echo "## Docker Images for this PR" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Images will be built with the following tags:" >> $GITHUB_STEP_SUMMARY
+          echo "- \`ghcr.io/${OWNER_LOWER}/eigenlayer:${CHANNEL_TAG}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`ghcr.io/${OWNER_LOWER}/eigenlayer:${CHANNEL_TAG}-${SHORT_SHA}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`ghcr.io/${OWNER_LOWER}/ethereum:${CHANNEL_TAG}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`ghcr.io/${OWNER_LOWER}/ethereum:${CHANNEL_TAG}-${SHORT_SHA}\`" >> $GITHUB_STEP_SUMMARY
 
       # ---------- Eigenlayer ----------
       - name: Build eigenlayer (multi-tag)
