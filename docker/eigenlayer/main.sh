@@ -250,6 +250,4 @@ for i in $(seq 1 $num_accounts); do
     echo "Operator $i weight in quorum 0: $WEIGHT"
 done
 
-# Keep container open for debugging
-echo "Script execution finished. Keeping container open..."
-while true; do sleep 1; done
+echo "Script execution finished. Container will now exit."
