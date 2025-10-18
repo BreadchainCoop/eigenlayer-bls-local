@@ -41,17 +41,17 @@ jobs:
           EOF
 
       - name: Start Docker services
-        run: docker-compose up -d
+        run: docker compose up -d
 
       - name: Wait for Ethereum node
         run: |
           echo "Waiting for Ethereum node to be ready..."
           max_wait=60
           waited=0
-          while ! docker-compose exec -T ethereum cast client --rpc-url http://localhost:8545 > /dev/null 2>&1; do
+          while ! docker compose exec -T ethereum cast client --rpc-url http://localhost:8545 > /dev/null 2>&1; do
             if [ $waited -ge $max_wait ]; then
               echo "Ethereum node failed to start within ${max_wait}s"
-              docker-compose logs ethereum
+              docker compose logs ethereum
               exit 1
             fi
             sleep 2
@@ -67,10 +67,10 @@ jobs:
           waited=0
 
           # Wait for the eigenlayer container to exit (it runs once and exits)
-          while docker-compose ps eigenlayer | grep -q "Up"; do
+          while docker compose ps eigenlayer | grep -q "Up"; do
             if [ $waited -ge $max_wait ]; then
               echo "EigenLayer setup did not complete within ${max_wait}s"
-              docker-compose logs eigenlayer
+              docker compose logs eigenlayer
               exit 1
             fi
             sleep 10
@@ -79,10 +79,10 @@ jobs:
           done
 
           # Check if container exited successfully
-          exit_code=$(docker-compose ps -q eigenlayer | xargs docker inspect -f '{{.State.ExitCode}}')
+          exit_code=$(docker compose ps -q eigenlayer | xargs docker inspect -f '{{.State.ExitCode}}')
           if [ "$exit_code" != "0" ]; then
             echo "EigenLayer container exited with code: $exit_code"
-            docker-compose logs eigenlayer
+            docker compose logs eigenlayer
             exit 1
           fi
 
@@ -92,13 +92,13 @@ jobs:
         if: always()
         run: |
           echo "=== Ethereum logs ==="
-          docker-compose logs ethereum || true
+          docker compose logs ethereum || true
           echo ""
           echo "=== EigenLayer logs ==="
-          docker-compose logs eigenlayer || true
+          docker compose logs eigenlayer || true
           echo ""
           echo "=== Signer logs ==="
-          docker-compose logs signer || true
+          docker compose logs signer || true
 
       - name: Validate BLS keys
         run: |
@@ -262,4 +262,4 @@ jobs:
 
       - name: Cleanup
         if: always()
-        run: docker-compose down -v
+        run: docker compose down -v
