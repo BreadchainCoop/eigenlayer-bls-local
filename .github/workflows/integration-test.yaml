@@ -1,0 +1,265 @@
+name: Integration Test
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+  pull_request:
+    branches:
+      - dev
+  workflow_dispatch:
+
+jobs:
+  integration-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Create .env file
+        run: |
+          cat > .env << 'EOF'
+          # Network Configuration
+          RPC_URL=http://ethereum:8545
+          ENVIRONMENT=local
+
+          # Operator Configuration
+          PRIVATE_KEY=0xba35a33f95b443f059e794e4f440d22021400267fff05df4f4d3d2d8eee07215
+          FUNDED_KEY=0xba35a33f95b443f059e794e4f440d22021400267fff05df4f4d3d2d8eee07215
+          TEST_ACCOUNTS=3
+
+          # Service Configuration
+          CERBERUS_GRPC_PORT=50051
+          CERBERUS_METRICS_PORT=9081
+          SIGNER_ENDPOINT=http://signer:50051
+          EOF
+
+      - name: Start Docker services
+        run: docker-compose up -d
+
+      - name: Wait for Ethereum node
+        run: |
+          echo "Waiting for Ethereum node to be ready..."
+          max_wait=60
+          waited=0
+          while ! docker-compose exec -T ethereum cast client --rpc-url http://localhost:8545 > /dev/null 2>&1; do
+            if [ $waited -ge $max_wait ]; then
+              echo "Ethereum node failed to start within ${max_wait}s"
+              docker-compose logs ethereum
+              exit 1
+            fi
+            sleep 2
+            waited=$((waited + 2))
+            echo "Waiting... (${waited}s/${max_wait}s)"
+          done
+          echo "Ethereum node is ready"
+
+      - name: Wait for EigenLayer setup
+        run: |
+          echo "Waiting for EigenLayer setup to complete..."
+          max_wait=600
+          waited=0
+
+          # Wait for the eigenlayer container to exit (it runs once and exits)
+          while docker-compose ps eigenlayer | grep -q "Up"; do
+            if [ $waited -ge $max_wait ]; then
+              echo "EigenLayer setup did not complete within ${max_wait}s"
+              docker-compose logs eigenlayer
+              exit 1
+            fi
+            sleep 10
+            waited=$((waited + 10))
+            echo "Setup running... (${waited}s/${max_wait}s)"
+          done
+
+          # Check if container exited successfully
+          exit_code=$(docker-compose ps -q eigenlayer | xargs docker inspect -f '{{.State.ExitCode}}')
+          if [ "$exit_code" != "0" ]; then
+            echo "EigenLayer container exited with code: $exit_code"
+            docker-compose logs eigenlayer
+            exit 1
+          fi
+
+          echo "EigenLayer setup completed successfully"
+
+      - name: Show logs for debugging
+        if: always()
+        run: |
+          echo "=== Ethereum logs ==="
+          docker-compose logs ethereum || true
+          echo ""
+          echo "=== EigenLayer logs ==="
+          docker-compose logs eigenlayer || true
+          echo ""
+          echo "=== Signer logs ==="
+          docker-compose logs signer || true
+
+      - name: Validate BLS keys
+        run: |
+          echo "Validating BLS keys..."
+          BLS_KEY_MIN_LENGTH=30
+          EXPECTED_ACCOUNTS=3
+
+          if [ ! -d "./.nodes/operator_keys" ]; then
+            echo "Error: Operator keys directory not found at ./.nodes/operator_keys"
+            exit 1
+          fi
+
+          # Count BLS key files
+          bls_key_count=$(ls -1 ./.nodes/operator_keys/*.private.bls.key.json 2>/dev/null | wc -l | tr -d ' ')
+          echo "Found $bls_key_count BLS key files"
+
+          if [ "$bls_key_count" -ne "$EXPECTED_ACCOUNTS" ]; then
+            echo "Error: Expected $EXPECTED_ACCOUNTS BLS keys, found $bls_key_count"
+            ls -la ./.nodes/operator_keys/ || true
+            exit 1
+          fi
+
+          # Validate each BLS key
+          for keyfile in ./.nodes/operator_keys/*.private.bls.key.json; do
+            if [ ! -f "$keyfile" ]; then
+              continue
+            fi
+
+            account_name=$(basename "$keyfile" .private.bls.key.json)
+            echo "Validating $account_name..."
+
+            # Extract private key
+            private_key=$(cat "$keyfile" | jq -r '.privateKey')
+            if [ -z "$private_key" ] || [ "$private_key" = "null" ]; then
+              echo "Error: Failed to extract privateKey from $keyfile"
+              cat "$keyfile"
+              exit 1
+            fi
+
+            # Check key length
+            key_length=${#private_key}
+            echo "  Key length: $key_length characters"
+
+            if [ $key_length -le $BLS_KEY_MIN_LENGTH ]; then
+              echo "Error: $account_name BLS key is too short: $key_length characters (expected > $BLS_KEY_MIN_LENGTH)"
+              echo "Key value: $private_key"
+              exit 1
+            fi
+
+            echo "  ✓ $account_name: valid ($key_length characters)"
+          done
+
+          echo "All BLS keys validated successfully!"
+
+      - name: Validate ECDSA keys
+        run: |
+          echo "Validating ECDSA keys..."
+          EXPECTED_ACCOUNTS=3
+
+          # Count ECDSA key files
+          ecdsa_key_count=$(ls -1 ./.nodes/operator_keys/*.private.ecdsa.key.json 2>/dev/null | wc -l | tr -d ' ')
+          echo "Found $ecdsa_key_count ECDSA key files"
+
+          if [ "$ecdsa_key_count" -ne "$EXPECTED_ACCOUNTS" ]; then
+            echo "Error: Expected $EXPECTED_ACCOUNTS ECDSA keys, found $ecdsa_key_count"
+            ls -la ./.nodes/operator_keys/ || true
+            exit 1
+          fi
+
+          # Validate each ECDSA key
+          for keyfile in ./.nodes/operator_keys/*.private.ecdsa.key.json; do
+            if [ ! -f "$keyfile" ]; then
+              continue
+            fi
+
+            account_name=$(basename "$keyfile" .private.ecdsa.key.json)
+            echo "Validating $account_name..."
+
+            # Extract keys
+            private_key=$(cat "$keyfile" | jq -r '.privateKey')
+            public_key=$(cat "$keyfile" | jq -r '.publicKey')
+
+            if [ -z "$private_key" ] || [ "$private_key" = "null" ]; then
+              echo "Error: Failed to extract privateKey from $keyfile"
+              exit 1
+            fi
+
+            if [ -z "$public_key" ] || [ "$public_key" = "null" ]; then
+              echo "Error: Failed to extract publicKey from $keyfile"
+              exit 1
+            fi
+
+            echo "  ✓ $account_name: valid"
+          done
+
+          echo "All ECDSA keys validated successfully!"
+
+      - name: Validate deployment files
+        run: |
+          echo "Validating deployment files..."
+
+          if [ ! -f "./.nodes/avs_deploy.json" ]; then
+            echo "Error: AVS deployment file not found at ./.nodes/avs_deploy.json"
+            ls -la ./.nodes/ || true
+            exit 1
+          fi
+
+          echo "AVS deployment file exists"
+
+          # Check for required addresses in deployment
+          registry_coordinator=$(cat ./.nodes/avs_deploy.json | jq -r '.addresses.registryCoordinator')
+          if [ -z "$registry_coordinator" ] || [ "$registry_coordinator" = "null" ]; then
+            echo "Error: Registry coordinator address not found in deployment file"
+            cat ./.nodes/avs_deploy.json
+            exit 1
+          fi
+          echo "  ✓ Registry coordinator: $registry_coordinator"
+
+          stake_registry=$(cat ./.nodes/avs_deploy.json | jq -r '.addresses.stakeRegistry')
+          if [ -z "$stake_registry" ] || [ "$stake_registry" = "null" ]; then
+            echo "Error: Stake registry address not found in deployment file"
+            cat ./.nodes/avs_deploy.json
+            exit 1
+          fi
+          echo "  ✓ Stake registry: $stake_registry"
+
+          echo "Deployment files validated successfully!"
+
+      - name: Validate BLS identifiers
+        run: |
+          echo "Validating BLS identifiers..."
+          EXPECTED_ACCOUNTS=3
+
+          identifier_count=$(ls -1 ./.nodes/operator_keys/*.bls.identifier 2>/dev/null | wc -l | tr -d ' ')
+          echo "Found $identifier_count BLS identifier files"
+
+          if [ "$identifier_count" -ne "$EXPECTED_ACCOUNTS" ]; then
+            echo "Error: Expected $EXPECTED_ACCOUNTS BLS identifiers, found $identifier_count"
+            ls -la ./.nodes/operator_keys/ || true
+            exit 1
+          fi
+
+          echo "All BLS identifiers validated successfully!"
+
+      - name: Test Summary
+        if: success()
+        run: |
+          echo "================================"
+          echo "Integration Test: PASSED"
+          echo "================================"
+          echo "Summary:"
+          echo "  ✓ Docker services started successfully"
+          echo "  ✓ Ethereum node ready"
+          echo "  ✓ EigenLayer setup completed"
+          echo "  ✓ 3 BLS keys created and validated (all > 30 chars)"
+          echo "  ✓ 3 ECDSA keys created and validated"
+          echo "  ✓ Deployment files created"
+          echo "  ✓ BLS identifiers created"
+          echo ""
+          echo "All tests passed successfully!"
+
+      - name: Cleanup
+        if: always()
+        run: docker-compose down -v
