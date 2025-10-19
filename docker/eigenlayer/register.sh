@@ -119,8 +119,8 @@ while [ -z "$private_bls_key" ] && [ $attempt -le $max_attempts ]; do
             private_bls_key=$(printf "%s\n" "$tmux_output" | grep -Eo '[0-9a-fA-F]{64,}' | head -1 | tr -d '[:space:]')
         fi
         if [ -z "$private_bls_key" ]; then
-            # Try to extract from box format (between // lines)
-            private_bls_key=$(printf "%s\n" "$tmux_output" | grep -E '^\s*//\s*[0-9]+\s*//\s*$' | grep -Eo '[0-9]{64,}' | head -1)
+            # Try to extract from box format (between // lines) - extract the number between // markers
+            private_bls_key=$(printf "%s\n" "$tmux_output" | grep '//.*[0-9]\{64,\}.*//\|' | sed 's|//||g' | tr -d ' ' | grep -o '[0-9]\{64,\}')
         fi
     done
 
