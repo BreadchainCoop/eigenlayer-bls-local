@@ -115,7 +115,12 @@ while [ -z "$private_bls_key" ] && [ $attempt -le $max_attempts ]; do
         tmux_output=$(tmux capture-pane -t export_key -S - -E - -p 2>/dev/null)
         private_bls_key=$(printf "%s\n" "$tmux_output" | awk '/Private key:/{getline; print; exit}' | tr -d '[:space:]')
         if [ -z "$private_bls_key" ]; then
+            # Extract long hex string (64+ chars) or long decimal number (64+ digits)
             private_bls_key=$(printf "%s\n" "$tmux_output" | grep -Eo '[0-9a-fA-F]{64,}' | head -1 | tr -d '[:space:]')
+        fi
+        if [ -z "$private_bls_key" ]; then
+            # Try to extract from box format (between // lines)
+            private_bls_key=$(printf "%s\n" "$tmux_output" | grep -E '^\s*//\s*[0-9]+\s*//\s*$' | grep -Eo '[0-9]{64,}' | head -1)
         fi
     done
 
