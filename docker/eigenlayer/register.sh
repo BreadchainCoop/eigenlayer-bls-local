@@ -38,9 +38,9 @@ if [ "$ENVIRONMENT" = "TESTNET" ]; then
     fi
 
 
-MINT_FUNCTION="submit(address _referral)"
+MINT_FUNCTION="submit(address)"
 echo "[register] Minting LST via $LST_CONTRACT_ADDRESS..."
-mint_output=$(cast send $LST_CONTRACT_ADDRESS "$MINT_FUNCTION" $ADDRESS "0x0000000000000000000000000000000000000000" --private-key $PRIVATE_KEY --value 10000000000000000 --rpc-url $RPC_URL 2>&1)
+mint_output=$(cast send $LST_CONTRACT_ADDRESS "$MINT_FUNCTION" "0x0000000000000000000000000000000000000000" --private-key $PRIVATE_KEY --value 10000000000000000 --rpc-url $RPC_URL 2>&1)
 mint_result=$?
 if [ $mint_result -ne 0 ]; then
     echo "Error: Failed to mint LST for $ADDRESS"
