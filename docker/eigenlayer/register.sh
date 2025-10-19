@@ -162,7 +162,7 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-echo -n $result > $HOME/.nodes/operator_keys/${new_account}.bls.identifier
-echo -n "{\"privateKey\":\"$private_bls_key\"}" > $HOME/.nodes/operator_keys/${new_account}.private.bls.key.json
-echo -n "{\"privateKey\":\"$PRIVATE_KEY\",\"publicKey\":\"$ADDRESS\"}" > $HOME/.nodes/operator_keys/${new_account}.private.ecdsa.key.json
+echo -n "$result" > $HOME/.nodes/operator_keys/${new_account}.bls.identifier
+printf '{"privateKey":"%s"}' "$private_bls_key" > $HOME/.nodes/operator_keys/${new_account}.private.bls.key.json
+printf '{"privateKey":"%s","publicKey":"%s"}' "$PRIVATE_KEY" "$ADDRESS" > $HOME/.nodes/operator_keys/${new_account}.private.ecdsa.key.json
 cp $HOME/.eigenlayer/operator_keys/${new_account}.bls.key.json $HOME/.nodes/operator_keys/${new_account}.bls.key.json
