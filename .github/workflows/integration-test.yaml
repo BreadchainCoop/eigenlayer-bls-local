@@ -37,7 +37,7 @@ jobs:
           # Network Configuration
           FORK_URL=https://eth.llamarpc.com
           RPC_URL=http://ethereum:8545
-          ENVIRONMENT=local
+          ENVIRONMENT=LOCAL
 
           # Operator Configuration
           PRIVATE_KEY=0xba35a33f95b443f059e794e4f440d22021400267fff05df4f4d3d2d8eee07215
@@ -73,7 +73,7 @@ jobs:
       - name: Wait for EigenLayer setup
         run: |
           echo "Waiting for EigenLayer setup to complete..."
-          max_wait=600
+          max_wait=900
           waited=0
 
           # Wait for the eigenlayer container to exit (it runs once and exits)
@@ -86,10 +86,23 @@ jobs:
             sleep 10
             waited=$((waited + 10))
             echo "Setup running... (${waited}s/${max_wait}s)"
+
+            # Show progress logs every 30 seconds
+            if [ $((waited % 30)) -eq 0 ]; then
+              echo "Latest logs:"
+              docker compose logs --tail=10 eigenlayer 2>&1 || true
+            fi
           done
 
           # Check if container exited successfully
-          exit_code=$(docker compose ps -q eigenlayer | xargs docker inspect -f '{{.State.ExitCode}}')
+          container_id=$(docker compose ps -aq eigenlayer)
+          if [ -z "$container_id" ]; then
+            echo "Error: Could not find eigenlayer container"
+            docker compose ps -a
+            exit 1
+          fi
+
+          exit_code=$(docker inspect -f '{{.State.ExitCode}}' "$container_id")
           if [ "$exit_code" != "0" ]; then
             echo "EigenLayer container exited with code: $exit_code"
             docker compose logs eigenlayer
