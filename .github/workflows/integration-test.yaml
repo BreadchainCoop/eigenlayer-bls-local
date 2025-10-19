@@ -161,6 +161,9 @@ jobs:
               exit 1
             fi
 
+            # Log the BLS private key
+            echo "  BLS private key from file: $private_key"
+
             # Check key length
             key_length=${#private_key}
             echo "  Key length: $key_length characters"
