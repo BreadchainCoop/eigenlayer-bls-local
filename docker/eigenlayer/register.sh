@@ -77,7 +77,6 @@ fi
 
 new_account="testacc${new_num}"
 ecdsa_keystore_path="${HOME}/.nodes/operator_keys/${new_account}.ecdsa.key.json"
-bls_keystore_path="${HOME}/.nodes/operator_keys/${new_account}.bls.key.json"
 password="Testacc1Testacc1"
 
 echo "[register] Importing ECDSA key for $new_account..."
@@ -85,68 +84,25 @@ echo $password | eigenlayer keys import --insecure --key-type ecdsa $new_account
 
 cp $HOME/.eigenlayer/operator_keys/${new_account}.ecdsa.key.json $HOME/.nodes/operator_keys/${new_account}.ecdsa.key.json
 
-echo "[register] Creating BLS key for $new_account..."
-echo $password |  eigenlayer keys create --key-type bls --insecure $new_account
-
-echo "[register] Exporting BLS private key (with retries)..."
-# Extract BLS private key using tmux-based interactive export with retries
-private_bls_key=""
-attempt=1
-max_attempts=5
-while [ -z "$private_bls_key" ] || [ ${#private_bls_key} -le 30 ]; do
-    if [ $attempt -gt $max_attempts ]; then
-        break
-    fi
-
-    echo "[register] BLS export attempt $attempt of $max_attempts"
-
-    # Clean up any existing tmux session
-    tmux has-session -t export_key 2>/dev/null && tmux kill-session -t export_key >/dev/null 2>&1
-
-    # Create new tmux session and run export command
-    tmux new-session -d -s export_key
-    tmux send-keys -t export_key "eigenlayer keys export --key-type bls $new_account" C-m
-    sleep 1
-    tmux send-keys -t export_key "y" C-m
-    sleep 1
-    tmux send-keys -t export_key "$password" C-m
-
-    # Poll for output with incremental waits
-    waited=0
-    while [ $waited -lt 12 ] && ([ -z "$private_bls_key" ] || [ ${#private_bls_key} -le 30 ]); do
-        sleep 2
-        waited=$((waited + 2))
-        tmux_output=$(tmux capture-pane -t export_key -S - -E - -p 2>/dev/null)
-        private_bls_key=$(printf "%s\n" "$tmux_output" | awk '/Private key:/{getline; print; exit}' | tr -d '[:space:]')
-        if [ -z "$private_bls_key" ] || [ ${#private_bls_key} -le 30 ]; then
-            # Extract long hex string (64+ chars) or long decimal number (64+ digits)
-            private_bls_key=$(printf "%s\n" "$tmux_output" | grep -Eo '[0-9a-fA-F]{64,}' | head -1 | tr -d '[:space:]')
-        fi
-        if [ -z "$private_bls_key" ] || [ ${#private_bls_key} -le 30 ]; then
-            # Try to extract from box format - look for line with // containing a long number
-            private_bls_key=$(printf "%s\n" "$tmux_output" | awk '/\/\/.+\/\// {gsub(/\/\//, ""); gsub(/ /, ""); if (length($0) >= 64) print $0; exit}')
-        fi
-    done
-
-    # Clean up tmux session
-    tmux kill-session -t export_key 2>/dev/null || true
-
-    if [ -z "$private_bls_key" ] || [ ${#private_bls_key} -le 30 ]; then
-        echo "[register] Export attempt $attempt failed (key length: ${#private_bls_key}); retrying..."
-        private_bls_key=""
-        attempt=$((attempt + 1))
-        sleep 2
-    fi
-done
-
-if [ -z "$private_bls_key" ]; then
-    echo "Error: Failed to extract BLS private key for $new_account"
-    echo "BLS key file exists at: $HOME/.eigenlayer/operator_keys/${new_account}.bls.key.json"
-    echo "Try running the container again or check the eigenlayer CLI version"
+echo "[register] Creating BLS key for $new_account using crypto-libs..."
+# Generate BLS key using our custom tool
+bls_keystore_tmp_path="${HOME}/.nodes/operator_keys/${new_account}.bls.key.json"
+bls_output=$(blskeygen "$bls_keystore_tmp_path" "$password")
+if [ $? -ne 0 ]; then
+    echo "Error: Failed to generate BLS key for $new_account"
+    echo "$bls_output"
     exit 1
 fi
 
-# Validate BLS key length (must be > 30 characters)
+# Parse the JSON output
+private_bls_key=$(echo "$bls_output" | jq -r '.privateKey')
+
+if [ -z "$private_bls_key" ] || [ "$private_bls_key" = "null" ]; then
+    echo "Error: Failed to extract BLS private key from blskeygen output"
+    exit 1
+fi
+
+# Validate BLS key length (must be > 30 characters for hex, typically 64)
 key_length=${#private_bls_key}
 if [ $key_length -le 30 ]; then
     echo "Error: BLS private key is too short (${key_length} characters). Expected > 30 characters."
@@ -165,4 +121,4 @@ fi
 echo -n $result > $HOME/.nodes/operator_keys/${new_account}.bls.identifier
 echo -n "{\"privateKey\":\"$private_bls_key\"}" > $HOME/.nodes/operator_keys/${new_account}.private.bls.key.json
 echo -n "{\"privateKey\":\"$PRIVATE_KEY\",\"publicKey\":\"$ADDRESS\"}" > $HOME/.nodes/operator_keys/${new_account}.private.ecdsa.key.json
-cp $HOME/.eigenlayer/operator_keys/${new_account}.bls.key.json $HOME/.nodes/operator_keys/${new_account}.bls.key.json
+# BLS keystore already generated at $HOME/.nodes/operator_keys/${new_account}.bls.key.json
