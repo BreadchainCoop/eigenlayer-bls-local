@@ -3,13 +3,19 @@
 # ============================================================================
 
 # Go Builder Stage - Install Go tools
-FROM golang:1.21 AS go-builder
+FROM golang:1.23 AS go-builder
 
 # Install EigenLayer CLI
 RUN go install github.com/Layr-Labs/eigenlayer-cli/cmd/eigenlayer@v0.10.3
 
 # Install gRPC tools
 RUN go install github.com/fullstorydev/grpcurl/cmd/grpcurl@latest
+
+# Build BLS key generation tool
+WORKDIR /build
+COPY docker/eigenlayer/blskeygen/ .
+RUN go mod download && \
+    go build -o /go/bin/blskeygen .
 
 # Foundry Stage - Main application container
 FROM ghcr.io/foundry-rs/foundry:stable
@@ -21,13 +27,13 @@ USER root
 RUN apt-get update && apt-get install -y \
     lsof \
     jq \
-    tmux \
     bash \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy Go binaries from builder stage
 COPY --from=go-builder /go/bin/eigenlayer /usr/local/bin/
 COPY --from=go-builder /go/bin/grpcurl /usr/local/bin/
+COPY --from=go-builder /go/bin/blskeygen /usr/local/bin/
 
 # Clone and build BLS middleware contracts
 RUN git clone --recurse-submodules https://github.com/BreadchainCoop/bls-middleware.git && \
