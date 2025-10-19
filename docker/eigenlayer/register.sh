@@ -93,12 +93,16 @@ echo "[register] Exporting BLS private key (with retries)..."
 private_bls_key=""
 attempt=1
 max_attempts=5
-while [ -z "$private_bls_key" ] && [ $attempt -le $max_attempts ]; do
+while [ -z "$private_bls_key" ] || [ ${#private_bls_key} -le 30 ]; do
+    if [ $attempt -gt $max_attempts ]; then
+        break
+    fi
+
     echo "[register] BLS export attempt $attempt of $max_attempts"
-    
+
     # Clean up any existing tmux session
     tmux has-session -t export_key 2>/dev/null && tmux kill-session -t export_key >/dev/null 2>&1
-    
+
     # Create new tmux session and run export command
     tmux new-session -d -s export_key
     tmux send-keys -t export_key "eigenlayer keys export --key-type bls $new_account" C-m
@@ -109,16 +113,16 @@ while [ -z "$private_bls_key" ] && [ $attempt -le $max_attempts ]; do
 
     # Poll for output with incremental waits
     waited=0
-    while [ $waited -lt 12 ] && [ -z "$private_bls_key" ]; do
+    while [ $waited -lt 12 ] && ([ -z "$private_bls_key" ] || [ ${#private_bls_key} -le 30 ]); do
         sleep 2
         waited=$((waited + 2))
         tmux_output=$(tmux capture-pane -t export_key -S - -E - -p 2>/dev/null)
         private_bls_key=$(printf "%s\n" "$tmux_output" | awk '/Private key:/{getline; print; exit}' | tr -d '[:space:]')
-        if [ -z "$private_bls_key" ]; then
+        if [ -z "$private_bls_key" ] || [ ${#private_bls_key} -le 30 ]; then
             # Extract long hex string (64+ chars) or long decimal number (64+ digits)
             private_bls_key=$(printf "%s\n" "$tmux_output" | grep -Eo '[0-9a-fA-F]{64,}' | head -1 | tr -d '[:space:]')
         fi
-        if [ -z "$private_bls_key" ]; then
+        if [ -z "$private_bls_key" ] || [ ${#private_bls_key} -le 30 ]; then
             # Try to extract from box format - look for line with // containing a long number
             private_bls_key=$(printf "%s\n" "$tmux_output" | awk '/\/\/.+\/\// {gsub(/\/\//, ""); gsub(/ /, ""); if (length($0) >= 64) print $0; exit}')
         fi
@@ -127,8 +131,9 @@ while [ -z "$private_bls_key" ] && [ $attempt -le $max_attempts ]; do
     # Clean up tmux session
     tmux kill-session -t export_key 2>/dev/null || true
 
-    if [ -z "$private_bls_key" ]; then
-        echo "[register] Export attempt $attempt failed; retrying..."
+    if [ -z "$private_bls_key" ] || [ ${#private_bls_key} -le 30 ]; then
+        echo "[register] Export attempt $attempt failed (key length: ${#private_bls_key}); retrying..."
+        private_bls_key=""
         attempt=$((attempt + 1))
         sleep 2
     fi
