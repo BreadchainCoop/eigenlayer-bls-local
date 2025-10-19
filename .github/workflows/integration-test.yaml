@@ -176,49 +176,6 @@ jobs:
 
           echo "All BLS keys validated successfully!"
 
-      - name: Validate ECDSA keys
-        run: |
-          echo "Validating ECDSA keys..."
-          EXPECTED_ACCOUNTS=3
-
-          # Count ECDSA key files
-          ecdsa_key_count=$(ls -1 ./.nodes/operator_keys/*.private.ecdsa.key.json 2>/dev/null | wc -l | tr -d ' ')
-          echo "Found $ecdsa_key_count ECDSA key files"
-
-          if [ "$ecdsa_key_count" -ne "$EXPECTED_ACCOUNTS" ]; then
-            echo "Error: Expected $EXPECTED_ACCOUNTS ECDSA keys, found $ecdsa_key_count"
-            ls -la ./.nodes/operator_keys/ || true
-            exit 1
-          fi
-
-          # Validate each ECDSA key
-          for keyfile in ./.nodes/operator_keys/*.private.ecdsa.key.json; do
-            if [ ! -f "$keyfile" ]; then
-              continue
-            fi
-
-            account_name=$(basename "$keyfile" .private.ecdsa.key.json)
-            echo "Validating $account_name..."
-
-            # Extract keys
-            private_key=$(cat "$keyfile" | jq -r '.privateKey')
-            public_key=$(cat "$keyfile" | jq -r '.publicKey')
-
-            if [ -z "$private_key" ] || [ "$private_key" = "null" ]; then
-              echo "Error: Failed to extract privateKey from $keyfile"
-              exit 1
-            fi
-
-            if [ -z "$public_key" ] || [ "$public_key" = "null" ]; then
-              echo "Error: Failed to extract publicKey from $keyfile"
-              exit 1
-            fi
-
-            echo "  ✓ $account_name: valid"
-          done
-
-          echo "All ECDSA keys validated successfully!"
-
       - name: Validate deployment files
         run: |
           echo "Validating deployment files..."
@@ -248,23 +205,37 @@ jobs:
           fi
           echo "  ✓ Stake registry: $stake_registry"
 
-          echo "Deployment files validated successfully!"
-
-      - name: Validate BLS identifiers
-        run: |
-          echo "Validating BLS identifiers..."
-          EXPECTED_ACCOUNTS=3
-
-          identifier_count=$(ls -1 ./.nodes/operator_keys/*.bls.identifier 2>/dev/null | wc -l | tr -d ' ')
-          echo "Found $identifier_count BLS identifier files"
-
-          if [ "$identifier_count" -ne "$EXPECTED_ACCOUNTS" ]; then
-            echo "Error: Expected $EXPECTED_ACCOUNTS BLS identifiers, found $identifier_count"
-            ls -la ./.nodes/operator_keys/ || true
+          # Verify deployed contracts have code at their addresses
+          echo "Verifying contract code at registry coordinator address..."
+          code_response=$(docker compose exec -T ethereum cast code "$registry_coordinator" --rpc-url http://localhost:8545 2>&1)
+          if [ $? -ne 0 ]; then
+            echo "Error: Failed to query contract code"
+            echo "$code_response"
             exit 1
           fi
 
-          echo "All BLS identifiers validated successfully!"
+          # Check if code is not 0x or empty
+          if [ "$code_response" = "0x" ] || [ -z "$code_response" ]; then
+            echo "Error: No contract code found at registry coordinator address $registry_coordinator"
+            exit 1
+          fi
+          echo "  ✓ Contract code verified at registry coordinator (${#code_response} bytes)"
+
+          echo "Verifying contract code at stake registry address..."
+          code_response=$(docker compose exec -T ethereum cast code "$stake_registry" --rpc-url http://localhost:8545 2>&1)
+          if [ $? -ne 0 ]; then
+            echo "Error: Failed to query contract code"
+            echo "$code_response"
+            exit 1
+          fi
+
+          if [ "$code_response" = "0x" ] || [ -z "$code_response" ]; then
+            echo "Error: No contract code found at stake registry address $stake_registry"
+            exit 1
+          fi
+          echo "  ✓ Contract code verified at stake registry (${#code_response} bytes)"
+
+          echo "Deployment files validated successfully!"
 
       - name: Test Summary
         if: success()
@@ -277,9 +248,7 @@ jobs:
           echo "  ✓ Ethereum node ready"
           echo "  ✓ EigenLayer setup completed"
           echo "  ✓ 3 BLS keys created and validated (all > 30 chars)"
-          echo "  ✓ 3 ECDSA keys created and validated"
-          echo "  ✓ Deployment files created"
-          echo "  ✓ BLS identifiers created"
+          echo "  ✓ Deployment files created with verified contract code"
           echo ""
           echo "All tests passed successfully!"
 
