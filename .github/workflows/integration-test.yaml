@@ -126,7 +126,7 @@ jobs:
       - name: Validate BLS keys
         run: |
           echo "Validating BLS keys..."
-          BLS_KEY_MIN_LENGTH=66
+          BLS_KEY_MIN_LENGTH=70
           EXPECTED_ACCOUNTS=3
 
           if [ ! -d "./.nodes/operator_keys" ]; then
@@ -153,7 +153,7 @@ jobs:
             account_name=$(basename "$keyfile" .private.bls.key.json)
             echo "Validating $account_name..."
 
-            # Extract private key
+            # Extract private key (should be decimal uint256)
             private_key=$(cat "$keyfile" | jq -r '.privateKey')
             if [ -z "$private_key" ] || [ "$private_key" = "null" ]; then
               echo "Error: Failed to extract privateKey from $keyfile"
@@ -161,20 +161,20 @@ jobs:
               exit 1
             fi
 
-            # Log the BLS private key
-            echo "  BLS private key from file: $private_key"
+            # Log the BLS private key (decimal uint256)
+            echo "  BLS private key (decimal uint256): $private_key"
 
-            # Check key length
+            # Check key length (should be ~77-78 digits for BN254)
             key_length=${#private_key}
-            echo "  Key length: $key_length characters"
+            echo "  Key length: $key_length digits"
 
-            if [ $key_length -le $BLS_KEY_MIN_LENGTH ]; then
-              echo "Error: $account_name BLS key is too short: $key_length characters (expected > $BLS_KEY_MIN_LENGTH)"
+            if [ $key_length -lt $BLS_KEY_MIN_LENGTH ]; then
+              echo "Error: $account_name BLS key is too short: $key_length digits (expected >= $BLS_KEY_MIN_LENGTH for uint256)"
               echo "Key value: $private_key"
               exit 1
             fi
 
-            echo "  ✓ $account_name: valid ($key_length characters)"
+            echo "  ✓ $account_name: valid ($key_length digit uint256)"
           done
 
           echo "All BLS keys validated successfully!"

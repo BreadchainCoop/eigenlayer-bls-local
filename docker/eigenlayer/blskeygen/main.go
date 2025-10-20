@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"os"
 	"strings"
 
@@ -61,11 +62,14 @@ func main() {
 
 	// Get the private key bytes for output
 	privateKeyBytes := privKey.Bytes()
-	privateKeyHexOutput := hex.EncodeToString(privateKeyBytes)
+
+	// Convert to big.Int (uint256 as decimal string for Solidity parseJsonUint)
+	privateKeyInt := new(big.Int).SetBytes(privateKeyBytes)
+	privateKeyDecimal := privateKeyInt.String()
 
 	// Output the private key in JSON format for easy parsing
 	output := map[string]string{
-		"privateKey": privateKeyHexOutput,
+		"privateKey": privateKeyDecimal,
 		"keystore":   keystorePath,
 	}
 
