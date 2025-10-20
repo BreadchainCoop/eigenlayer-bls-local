@@ -75,18 +75,9 @@ cp $HOME/.eigenlayer/operator_keys/${new_account}.ecdsa.key.json $HOME/.nodes/op
 echo $password |  eigenlayer keys create --key-type bls --insecure $new_account
 private_bls_key=$(./get_bls_key.sh "$password" "$new_account")
 if [ $? -ne 0 ]; then
-    echo "Error: Failed to export BLS key for $new_account"
+    echo "Error: Failed to get bls key for $new_account"
     exit 1
 fi
-
-# Validate BLS key length (must be > 30 characters)
-key_length=${#private_bls_key}
-if [ $key_length -le 30 ]; then
-    echo "Error: BLS private key is too short (${key_length} characters). Expected > 30 characters."
-    echo "Invalid key: $private_bls_key"
-    exit 1
-fi
-
 result=$(grpcurl -plaintext -d '{"privateKey": "'"$private_bls_key"'", "password": "'"$password"'"}' signer:50051  keymanager.v1.KeyManager/ImportKey | jq -r '.publicKey' | tr -d '\n')
 if [ $? -ne 0 ]; then
     echo "Error: Failed to import bls key for $new_account"
