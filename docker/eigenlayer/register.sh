@@ -16,20 +16,16 @@ if [ -z "$RPC_URL" ]; then
   exit 1
 fi
 
-echo "[register] Creating new ECDSA account..."
 ACCOUNT_INFO=$(cast wallet new --json)
 PRIVATE_KEY=$(echo "$ACCOUNT_INFO" | jq -r '.[0].private_key')
 ADDRESS=$(echo "$ACCOUNT_INFO" | jq -r '.[0].address')
-echo "[register] New account: $ADDRESS"
 if [ "$ENVIRONMENT" = "TESTNET" ]; then
-        echo "[register] Funding $ADDRESS on TESTNET..."
         cast s $ADDRESS --value 500000000000000000 --private-key "$FUNDED_KEY" -r "$RPC_URL" > /dev/null 2>&1
-        if [ $? -ne 0 ]; then   
+        if [ $? -ne 0 ]; then
             echo "Error: Failed to give operator $index balance"
             exit 1
         fi
     else
-        echo "[register] Setting local balance for $ADDRESS..."
         cast rpc anvil_setBalance $ADDRESS 0x10000000000000000000 --rpc-url $RPC_URL > /dev/null 2>&1
         if [ $? -ne 0 ]; then
             echo "Error: Failed to set balance for $ADDRESS"
@@ -39,27 +35,21 @@ if [ "$ENVIRONMENT" = "TESTNET" ]; then
 
 
 MINT_FUNCTION="submit(address)"
-echo "[register] Minting LST via $LST_CONTRACT_ADDRESS..."
-mint_output=$(cast send $LST_CONTRACT_ADDRESS "$MINT_FUNCTION" "0x0000000000000000000000000000000000000000" --private-key $PRIVATE_KEY --value 10000000000000000 --rpc-url $RPC_URL 2>&1)
-mint_result=$?
-if [ $mint_result -ne 0 ]; then
+cast send $LST_CONTRACT_ADDRESS "$MINT_FUNCTION" "0x0000000000000000000000000000000000000000" --private-key $PRIVATE_KEY --value 10000000000000000 --rpc-url $RPC_URL > /dev/null 2>&1
+if [ $? -ne 0 ]; then
     echo "Error: Failed to mint LST for $ADDRESS"
-    echo "Output: $mint_output"
     exit 1
 fi
-echo "[register] Approving LST for strategy manager $STRATEGY_MANAGER_ADDRESS..."
 cast send $LST_CONTRACT_ADDRESS "approve(address,uint256)" $STRATEGY_MANAGER_ADDRESS 1000000000000000000000000 --private-key $PRIVATE_KEY --rpc-url $RPC_URL > /dev/null 2>&1
 if [ $? -ne 0 ]; then
     echo "Error: Failed to approve LST for $STRATEGY_MANAGER_ADDRESS"
     exit 1
 fi
-echo "[register] Depositing into strategy $LST_STRATEGY_ADDRESS via $STRATEGY_MANAGER_ADDRESS..."
 cast send $STRATEGY_MANAGER_ADDRESS "depositIntoStrategy(address,address,uint256)" $LST_STRATEGY_ADDRESS $LST_CONTRACT_ADDRESS 10000000000000000 --private-key $PRIVATE_KEY --rpc-url $RPC_URL  > /dev/null 2>&1
 if [ $? -ne 0 ]; then
     echo "Error: Failed to deposit into strategy for $LST_STRATEGY_ADDRESS"
     exit 1
 fi
-echo "[register] Registering as operator at $DELEGATION_MANAGER_ADDRESS..."
 cast send $DELEGATION_MANAGER_ADDRESS "registerAsOperator(address,uint32,string)" "$ADDRESS"  "1" "foo.bar" --private-key $PRIVATE_KEY --rpc-url $RPC_URL > /dev/null 2>&1
 if [ $? -ne 0 ]; then
     echo "Error: Failed to register as operator for $DELEGATION_MANAGER_ADDRESS"
@@ -81,44 +71,56 @@ password="Testacc1Testacc1"
 
 echo "[register] Importing ECDSA key for $new_account..."
 echo $password | eigenlayer keys import --insecure --key-type ecdsa $new_account $PRIVATE_KEY
-
 cp $HOME/.eigenlayer/operator_keys/${new_account}.ecdsa.key.json $HOME/.nodes/operator_keys/${new_account}.ecdsa.key.json
+echo "[register] ECDSA key imported successfully"
 
 echo "[register] Creating BLS key for $new_account using crypto-libs..."
 # Generate BLS key using our custom tool
 bls_keystore_tmp_path="${HOME}/.nodes/operator_keys/${new_account}.bls.key.json"
+echo "[register] Generating BN254 BLS key pair..."
 bls_output=$(blskeygen "$bls_keystore_tmp_path" "$password")
 if [ $? -ne 0 ]; then
-    echo "Error: Failed to generate BLS key for $new_account"
-    echo "$bls_output"
+    echo "[register] ERROR: Failed to generate BLS key for $new_account"
+    echo "[register] blskeygen output: $bls_output"
     exit 1
 fi
+echo "[register] BLS key pair generated successfully"
 
 # Parse the JSON output
+echo "[register] Parsing BLS key from output..."
 private_bls_key=$(echo "$bls_output" | jq -r '.privateKey')
 
 if [ -z "$private_bls_key" ] || [ "$private_bls_key" = "null" ]; then
-    echo "Error: Failed to extract BLS private key from blskeygen output"
+    echo "[register] ERROR: Failed to extract BLS private key from blskeygen output"
+    echo "[register] Output was: $bls_output"
     exit 1
 fi
+echo "[register] BLS private key extracted successfully"
 
-# Validate BLS key length (must be > 30 characters for hex, typically 64)
+# Validate BLS key length (must be >= 64 characters for hex, matching integration test requirement)
 key_length=${#private_bls_key}
-if [ $key_length -le 30 ]; then
-    echo "Error: BLS private key is too short (${key_length} characters). Expected > 30 characters."
-    echo "Invalid key: $private_bls_key"
+echo "[register] Validating BLS key length..."
+echo "[register] Key length: ${key_length} characters"
+if [ $key_length -lt 64 ]; then
+    echo "[register] ERROR: BLS private key is too short (${key_length} characters). Expected >= 64 characters."
+    echo "[register] Invalid key: $private_bls_key"
     exit 1
 fi
-echo "[register] BLS key validation passed (${key_length} characters)"
+echo "[register] ✓ BLS key validation passed (${key_length} characters)"
 
+echo "[register] Importing BLS key to signer service..."
 result=$(grpcurl -plaintext -d '{"privateKey": "'"$private_bls_key"'", "password": "'"$password"'"}' signer:50051  keymanager.v1.KeyManager/ImportKey | jq -r '.publicKey' | tr -d '\n')
 if [ $? -ne 0 ]; then
-    echo "Error: Failed to import bls key for $new_account"
-    echo "$result"
+    echo "[register] ERROR: Failed to import BLS key to signer for $new_account"
+    echo "[register] Signer response: $result"
     exit 1
 fi
+echo "[register] BLS key imported to signer successfully"
+echo "[register] BLS public key: $result"
 
-echo -n $result > $HOME/.nodes/operator_keys/${new_account}.bls.identifier
-echo -n "{\"privateKey\":\"$private_bls_key\"}" > $HOME/.nodes/operator_keys/${new_account}.private.bls.key.json
-echo -n "{\"privateKey\":\"$PRIVATE_KEY\",\"publicKey\":\"$ADDRESS\"}" > $HOME/.nodes/operator_keys/${new_account}.private.ecdsa.key.json
+echo "[register] Writing key files..."
+echo -n "$result" > $HOME/.nodes/operator_keys/${new_account}.bls.identifier
+printf '{"privateKey":"%s"}' "$private_bls_key" > $HOME/.nodes/operator_keys/${new_account}.private.bls.key.json
+printf '{"privateKey":"%s","publicKey":"%s"}' "$PRIVATE_KEY" "$ADDRESS" > $HOME/.nodes/operator_keys/${new_account}.private.ecdsa.key.json
 # BLS keystore already generated at $HOME/.nodes/operator_keys/${new_account}.bls.key.json
+echo "[register] ✓ Key files written successfully for $new_account"

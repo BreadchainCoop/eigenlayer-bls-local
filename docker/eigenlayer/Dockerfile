@@ -50,6 +50,9 @@ RUN chmod +x /main.sh
 COPY docker/eigenlayer/register.sh /register.sh
 RUN chmod +x /register.sh
 
+COPY docker/eigenlayer/get_bls_key.sh /get_bls_key.sh
+RUN chmod +x /get_bls_key.sh
+
 COPY docker/eigenlayer/eject.sh /eject.sh
 RUN chmod +x /eject.sh
 
