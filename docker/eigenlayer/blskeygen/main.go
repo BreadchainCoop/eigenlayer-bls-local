@@ -61,7 +61,7 @@ func main() {
 
 	// Get the private key bytes for output
 	privateKeyBytes := privKey.Bytes()
-	privateKeyHexOutput := hex.EncodeToString(privateKeyBytes)
+	privateKeyHexOutput := "0x" + hex.EncodeToString(privateKeyBytes)
 
 	// Output the private key in JSON format for easy parsing
 	output := map[string]string{

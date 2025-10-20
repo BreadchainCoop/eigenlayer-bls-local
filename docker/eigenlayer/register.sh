@@ -97,12 +97,12 @@ if [ -z "$private_bls_key" ] || [ "$private_bls_key" = "null" ]; then
 fi
 echo "[register] BLS private key extracted successfully"
 
-# Validate BLS key length (must be >= 64 characters for hex, matching integration test requirement)
+# Validate BLS key length (must be 66 characters: "0x" + 64 hex chars)
 key_length=${#private_bls_key}
 echo "[register] Validating BLS key length..."
 echo "[register] Key length: ${key_length} characters"
-if [ $key_length -lt 64 ]; then
-    echo "[register] ERROR: BLS private key is too short (${key_length} characters). Expected >= 64 characters."
+if [ $key_length -lt 66 ]; then
+    echo "[register] ERROR: BLS private key is too short (${key_length} characters). Expected 66 characters (0x + 64 hex)."
     echo "[register] Invalid key: $private_bls_key"
     exit 1
 fi
