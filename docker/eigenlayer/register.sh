@@ -117,14 +117,22 @@ while [ -z "$private_bls_key" ] || [ ${#private_bls_key} -le 30 ]; do
         sleep 2
         waited=$((waited + 2))
         tmux_output=$(tmux capture-pane -t export_key -S - -E - -p 2>/dev/null)
-        private_bls_key=$(printf "%s\n" "$tmux_output" | awk '/Private key:/{getline; print; exit}' | tr -d '[:space:]')
+
+        # Try to extract from box format first - this is the most reliable
+        private_bls_key=$(printf "%s\n" "$tmux_output" | awk '/\/\/.*[0-9].*\/\// {
+            # Remove // markers and spaces
+            gsub(/\/\//, "");
+            gsub(/ /, "");
+            # Only print if we have a reasonable length (64+)
+            if (length($0) >= 64) {
+                print $0;
+                exit;
+            }
+        }')
+
         if [ -z "$private_bls_key" ] || [ ${#private_bls_key} -le 30 ]; then
-            # Extract long hex string (64+ chars) or long decimal number (64+ digits)
-            private_bls_key=$(printf "%s\n" "$tmux_output" | grep -Eo '[0-9a-fA-F]{64,}' | head -1 | tr -d '[:space:]')
-        fi
-        if [ -z "$private_bls_key" ] || [ ${#private_bls_key} -le 30 ]; then
-            # Try to extract from box format - look for line with // containing a long number
-            private_bls_key=$(printf "%s\n" "$tmux_output" | awk '/\/\/.+\/\// {gsub(/\/\//, ""); gsub(/ /, ""); if (length($0) >= 64) print $0; exit}')
+            # Fallback: try to find line with "Private key:" and get next line
+            private_bls_key=$(printf "%s\n" "$tmux_output" | awk '/Private key:/{getline; print; exit}' | tr -d '[:space:]')
         fi
     done
 
