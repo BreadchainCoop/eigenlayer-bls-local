@@ -11,7 +11,7 @@ private_bls_key=""
 attempt=1
 max_attempts=5
 
-while [ -z "$private_bls_key" ] || [ ${#private_bls_key} -le 30 ]; do
+while [ -z "$private_bls_key" ] || [ ${#private_bls_key} -le 66 ]; do
     if [ $attempt -gt $max_attempts ]; then
         break
     fi
@@ -40,7 +40,7 @@ while [ -z "$private_bls_key" ] || [ ${#private_bls_key} -le 30 ]; do
     # Kill the session
     tmux kill-session -t export_key 2>/dev/null || true
 
-    if [ -z "$private_bls_key" ] || [ ${#private_bls_key} -le 30 ]; then
+    if [ -z "$private_bls_key" ] || [ ${#private_bls_key} -le 66 ]; then
         attempt=$((attempt + 1))
         sleep 2
     fi

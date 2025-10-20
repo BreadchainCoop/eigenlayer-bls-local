@@ -126,7 +126,7 @@ jobs:
       - name: Validate BLS keys
         run: |
           echo "Validating BLS keys..."
-          BLS_KEY_MIN_LENGTH=30
+          BLS_KEY_MIN_LENGTH=66
           EXPECTED_ACCOUNTS=3
 
           if [ ! -d "./.nodes/operator_keys" ]; then
