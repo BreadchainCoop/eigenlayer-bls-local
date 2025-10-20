@@ -1,0 +1,260 @@
+name: Integration Test
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+  pull_request:
+    branches:
+      - dev
+  workflow_dispatch:
+
+jobs:
+  integration-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Create .env file
+        run: |
+          cat > .env << 'EOF'
+          # Holesky Configuration
+          DELEGATION_MANAGER_ADDRESS=0xA44151489861Fe9e3055d95adC98FbD462B948e7
+          STRATEGY_MANAGER_ADDRESS=0xdfB5f6CE42aAA7830E94ECFCcAd411beF4d4D5b6
+          LST_CONTRACT_ADDRESS=0x3F1c547b21f65e10480dE3ad8E19fAAC46C95034
+          LST_STRATEGY_ADDRESS=0x7D704507b76571a51d9caE8AdDAbBFd0ba0e63d3
+          BLS_SIGNATURE_CHECKER_ADDRESS=0xca249215e082e17c12bb3c4881839a3f883e5c6b
+          OPERATOR_STATE_RETRIEVER_ADDRESS=0xB4baAfee917fb4449f5ec64804217bccE9f46C67
+          ALLOCATION_MANAGER_ADDRESS=0x78469728304326CBc65f8f95FA756B0B73164462
+
+          # Network Configuration
+          FORK_URL=https://holesky.drpc.org
+          RPC_URL=http://ethereum:8545
+          ENVIRONMENT=LOCAL
+
+          # Operator Configuration
+          PRIVATE_KEY=0xba35a33f95b443f059e794e4f440d22021400267fff05df4f4d3d2d8eee07215
+          FUNDED_KEY=0xba35a33f95b443f059e794e4f440d22021400267fff05df4f4d3d2d8eee07215
+          TEST_ACCOUNTS=3
+
+          # Service Configuration
+          CERBERUS_GRPC_PORT=50051
+          CERBERUS_METRICS_PORT=9081
+          SIGNER_ENDPOINT=http://signer:50051
+          EOF
+
+      - name: Start Docker services
+        run: docker compose up -d
+
+      - name: Wait for Ethereum node
+        run: |
+          echo "Waiting for Ethereum node to be ready..."
+          max_wait=60
+          waited=0
+          while ! docker compose exec -T ethereum cast client --rpc-url http://localhost:8545 > /dev/null 2>&1; do
+            if [ $waited -ge $max_wait ]; then
+              echo "Ethereum node failed to start within ${max_wait}s"
+              docker compose logs ethereum
+              exit 1
+            fi
+            sleep 2
+            waited=$((waited + 2))
+            echo "Waiting... (${waited}s/${max_wait}s)"
+          done
+          echo "Ethereum node is ready"
+
+      - name: Wait for EigenLayer setup
+        run: |
+          echo "Waiting for EigenLayer setup to complete..."
+          max_wait=900
+          waited=0
+
+          # Wait for the eigenlayer container to exit (it runs once and exits)
+          while docker compose ps eigenlayer | grep -q "Up"; do
+            if [ $waited -ge $max_wait ]; then
+              echo "EigenLayer setup did not complete within ${max_wait}s"
+              docker compose logs eigenlayer
+              exit 1
+            fi
+            sleep 10
+            waited=$((waited + 10))
+            echo "Setup running... (${waited}s/${max_wait}s)"
+
+            # Show progress logs every 30 seconds
+            if [ $((waited % 30)) -eq 0 ]; then
+              echo "Latest logs:"
+              docker compose logs --tail=10 eigenlayer 2>&1 || true
+            fi
+          done
+
+          # Check if container exited successfully
+          container_id=$(docker compose ps -aq eigenlayer)
+          if [ -z "$container_id" ]; then
+            echo "Error: Could not find eigenlayer container"
+            docker compose ps -a
+            exit 1
+          fi
+
+          exit_code=$(docker inspect -f '{{.State.ExitCode}}' "$container_id")
+          if [ "$exit_code" != "0" ]; then
+            echo "EigenLayer container exited with code: $exit_code"
+            docker compose logs eigenlayer
+            exit 1
+          fi
+
+          echo "EigenLayer setup completed successfully"
+
+      - name: Show logs for debugging
+        if: always()
+        run: |
+          echo "=== Ethereum logs ==="
+          docker compose logs ethereum || true
+          echo ""
+          echo "=== EigenLayer logs ==="
+          docker compose logs eigenlayer || true
+          echo ""
+          echo "=== Signer logs ==="
+          docker compose logs signer || true
+
+      - name: Validate BLS keys
+        run: |
+          echo "Validating BLS keys..."
+          BLS_KEY_MIN_LENGTH=66
+          EXPECTED_ACCOUNTS=3
+
+          if [ ! -d "./.nodes/operator_keys" ]; then
+            echo "Error: Operator keys directory not found at ./.nodes/operator_keys"
+            exit 1
+          fi
+
+          # Count BLS key files
+          bls_key_count=$(ls -1 ./.nodes/operator_keys/*.private.bls.key.json 2>/dev/null | wc -l | tr -d ' ')
+          echo "Found $bls_key_count BLS key files"
+
+          if [ "$bls_key_count" -ne "$EXPECTED_ACCOUNTS" ]; then
+            echo "Error: Expected $EXPECTED_ACCOUNTS BLS keys, found $bls_key_count"
+            ls -la ./.nodes/operator_keys/ || true
+            exit 1
+          fi
+
+          # Validate each BLS key
+          for keyfile in ./.nodes/operator_keys/*.private.bls.key.json; do
+            if [ ! -f "$keyfile" ]; then
+              continue
+            fi
+
+            account_name=$(basename "$keyfile" .private.bls.key.json)
+            echo "Validating $account_name..."
+
+            # Extract private key
+            private_key=$(cat "$keyfile" | jq -r '.privateKey')
+            if [ -z "$private_key" ] || [ "$private_key" = "null" ]; then
+              echo "Error: Failed to extract privateKey from $keyfile"
+              cat "$keyfile"
+              exit 1
+            fi
+
+            # Log the BLS private key
+            echo "  BLS private key from file: $private_key"
+
+            # Check key length
+            key_length=${#private_key}
+            echo "  Key length: $key_length characters"
+
+            if [ $key_length -le $BLS_KEY_MIN_LENGTH ]; then
+              echo "Error: $account_name BLS key is too short: $key_length characters (expected > $BLS_KEY_MIN_LENGTH)"
+              echo "Key value: $private_key"
+              exit 1
+            fi
+
+            echo "  ✓ $account_name: valid ($key_length characters)"
+          done
+
+          echo "All BLS keys validated successfully!"
+
+      - name: Validate deployment files
+        run: |
+          echo "Validating deployment files..."
+
+          if [ ! -f "./.nodes/avs_deploy.json" ]; then
+            echo "Error: AVS deployment file not found at ./.nodes/avs_deploy.json"
+            ls -la ./.nodes/ || true
+            exit 1
+          fi
+
+          echo "AVS deployment file exists"
+
+          # Check for required addresses in deployment
+          registry_coordinator=$(cat ./.nodes/avs_deploy.json | jq -r '.addresses.registryCoordinator')
+          if [ -z "$registry_coordinator" ] || [ "$registry_coordinator" = "null" ]; then
+            echo "Error: Registry coordinator address not found in deployment file"
+            cat ./.nodes/avs_deploy.json
+            exit 1
+          fi
+          echo "  ✓ Registry coordinator: $registry_coordinator"
+
+          stake_registry=$(cat ./.nodes/avs_deploy.json | jq -r '.addresses.stakeRegistry')
+          if [ -z "$stake_registry" ] || [ "$stake_registry" = "null" ]; then
+            echo "Error: Stake registry address not found in deployment file"
+            cat ./.nodes/avs_deploy.json
+            exit 1
+          fi
+          echo "  ✓ Stake registry: $stake_registry"
+
+          # Verify deployed contracts have code at their addresses
+          echo "Verifying contract code at registry coordinator address..."
+          code_response=$(docker compose exec -T ethereum cast code "$registry_coordinator" --rpc-url http://localhost:8545 2>&1)
+          if [ $? -ne 0 ]; then
+            echo "Error: Failed to query contract code"
+            echo "$code_response"
+            exit 1
+          fi
+
+          # Check if code is not 0x or empty
+          if [ "$code_response" = "0x" ] || [ -z "$code_response" ]; then
+            echo "Error: No contract code found at registry coordinator address $registry_coordinator"
+            exit 1
+          fi
+          echo "  ✓ Contract code verified at registry coordinator (${#code_response} bytes)"
+
+          echo "Verifying contract code at stake registry address..."
+          code_response=$(docker compose exec -T ethereum cast code "$stake_registry" --rpc-url http://localhost:8545 2>&1)
+          if [ $? -ne 0 ]; then
+            echo "Error: Failed to query contract code"
+            echo "$code_response"
+            exit 1
+          fi
+
+          if [ "$code_response" = "0x" ] || [ -z "$code_response" ]; then
+            echo "Error: No contract code found at stake registry address $stake_registry"
+            exit 1
+          fi
+          echo "  ✓ Contract code verified at stake registry (${#code_response} bytes)"
+
+          echo "Deployment files validated successfully!"
+
+      - name: Test Summary
+        if: success()
+        run: |
+          echo "================================"
+          echo "Integration Test: PASSED"
+          echo "================================"
+          echo "Summary:"
+          echo "  ✓ Docker services started successfully"
+          echo "  ✓ Ethereum node ready"
+          echo "  ✓ EigenLayer setup completed"
+          echo "  ✓ 3 BLS keys created and validated (all > 30 chars)"
+          echo "  ✓ Deployment files created with verified contract code"
+          echo ""
+          echo "All tests passed successfully!"
+
+      - name: Cleanup
+        if: always()
+        run: docker compose down -v
