@@ -16,20 +16,16 @@ if [ -z "$RPC_URL" ]; then
   exit 1
 fi
 
-echo "[register] Creating new ECDSA account..."
 ACCOUNT_INFO=$(cast wallet new --json)
 PRIVATE_KEY=$(echo "$ACCOUNT_INFO" | jq -r '.[0].private_key')
 ADDRESS=$(echo "$ACCOUNT_INFO" | jq -r '.[0].address')
-echo "[register] New account: $ADDRESS"
 if [ "$ENVIRONMENT" = "TESTNET" ]; then
-        echo "[register] Funding $ADDRESS on TESTNET..."
         cast s $ADDRESS --value 500000000000000000 --private-key "$FUNDED_KEY" -r "$RPC_URL" > /dev/null 2>&1
-        if [ $? -ne 0 ]; then   
+        if [ $? -ne 0 ]; then
             echo "Error: Failed to give operator $index balance"
             exit 1
         fi
     else
-        echo "[register] Setting local balance for $ADDRESS..."
         cast rpc anvil_setBalance $ADDRESS 0x10000000000000000000 --rpc-url $RPC_URL > /dev/null 2>&1
         if [ $? -ne 0 ]; then
             echo "Error: Failed to set balance for $ADDRESS"
@@ -39,27 +35,21 @@ if [ "$ENVIRONMENT" = "TESTNET" ]; then
 
 
 MINT_FUNCTION="submit(address)"
-echo "[register] Minting LST via $LST_CONTRACT_ADDRESS..."
-mint_output=$(cast send $LST_CONTRACT_ADDRESS "$MINT_FUNCTION" "0x0000000000000000000000000000000000000000" --private-key $PRIVATE_KEY --value 10000000000000000 --rpc-url $RPC_URL 2>&1)
-mint_result=$?
-if [ $mint_result -ne 0 ]; then
+cast send $LST_CONTRACT_ADDRESS "$MINT_FUNCTION" "0x0000000000000000000000000000000000000000" --private-key $PRIVATE_KEY --value 10000000000000000 --rpc-url $RPC_URL > /dev/null 2>&1
+if [ $? -ne 0 ]; then
     echo "Error: Failed to mint LST for $ADDRESS"
-    echo "Output: $mint_output"
     exit 1
 fi
-echo "[register] Approving LST for strategy manager $STRATEGY_MANAGER_ADDRESS..."
 cast send $LST_CONTRACT_ADDRESS "approve(address,uint256)" $STRATEGY_MANAGER_ADDRESS 1000000000000000000000000 --private-key $PRIVATE_KEY --rpc-url $RPC_URL > /dev/null 2>&1
 if [ $? -ne 0 ]; then
     echo "Error: Failed to approve LST for $STRATEGY_MANAGER_ADDRESS"
     exit 1
 fi
-echo "[register] Depositing into strategy $LST_STRATEGY_ADDRESS via $STRATEGY_MANAGER_ADDRESS..."
 cast send $STRATEGY_MANAGER_ADDRESS "depositIntoStrategy(address,address,uint256)" $LST_STRATEGY_ADDRESS $LST_CONTRACT_ADDRESS 10000000000000000 --private-key $PRIVATE_KEY --rpc-url $RPC_URL  > /dev/null 2>&1
 if [ $? -ne 0 ]; then
     echo "Error: Failed to deposit into strategy for $LST_STRATEGY_ADDRESS"
     exit 1
 fi
-echo "[register] Registering as operator at $DELEGATION_MANAGER_ADDRESS..."
 cast send $DELEGATION_MANAGER_ADDRESS "registerAsOperator(address,uint32,string)" "$ADDRESS"  "1" "foo.bar" --private-key $PRIVATE_KEY --rpc-url $RPC_URL > /dev/null 2>&1
 if [ $? -ne 0 ]; then
     echo "Error: Failed to register as operator for $DELEGATION_MANAGER_ADDRESS"
@@ -80,15 +70,9 @@ ecdsa_keystore_path="${HOME}/.nodes/operator_keys/${new_account}.ecdsa.key.json"
 bls_keystore_path="${HOME}/.nodes/operator_keys/${new_account}.bls.key.json"
 password="Testacc1Testacc1"
 
-echo "[register] Importing ECDSA key for $new_account..."
 echo $password | eigenlayer keys import --insecure --key-type ecdsa $new_account $PRIVATE_KEY
-
 cp $HOME/.eigenlayer/operator_keys/${new_account}.ecdsa.key.json $HOME/.nodes/operator_keys/${new_account}.ecdsa.key.json
-
-echo "[register] Creating BLS key for $new_account..."
 echo $password |  eigenlayer keys create --key-type bls --insecure $new_account
-
-echo "[register] Exporting BLS private key..."
 private_bls_key=$(./get_bls_key.sh "$password" "$new_account")
 if [ $? -ne 0 ]; then
     echo "Error: Failed to export BLS key for $new_account"
@@ -102,7 +86,6 @@ if [ $key_length -le 30 ]; then
     echo "Invalid key: $private_bls_key"
     exit 1
 fi
-echo "[register] BLS key validation passed (${key_length} characters)"
 
 result=$(grpcurl -plaintext -d '{"privateKey": "'"$private_bls_key"'", "password": "'"$password"'"}' signer:50051  keymanager.v1.KeyManager/ImportKey | jq -r '.publicKey' | tr -d '\n')
 if [ $? -ne 0 ]; then
