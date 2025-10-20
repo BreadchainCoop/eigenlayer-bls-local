@@ -88,69 +88,10 @@ cp $HOME/.eigenlayer/operator_keys/${new_account}.ecdsa.key.json $HOME/.nodes/op
 echo "[register] Creating BLS key for $new_account..."
 echo $password |  eigenlayer keys create --key-type bls --insecure $new_account
 
-echo "[register] Exporting BLS private key (with retries)..."
-# Extract BLS private key using tmux-based interactive export with retries
-private_bls_key=""
-attempt=1
-max_attempts=5
-while [ -z "$private_bls_key" ] || [ ${#private_bls_key} -le 30 ]; do
-    if [ $attempt -gt $max_attempts ]; then
-        break
-    fi
-
-    echo "[register] BLS export attempt $attempt of $max_attempts"
-
-    # Clean up any existing tmux session
-    tmux has-session -t export_key 2>/dev/null && tmux kill-session -t export_key >/dev/null 2>&1
-
-    # Create new tmux session and run export command
-    tmux new-session -d -s export_key
-    tmux send-keys -t export_key "eigenlayer keys export --key-type bls $new_account" C-m
-    sleep 1
-    tmux send-keys -t export_key "y" C-m
-    sleep 1
-    tmux send-keys -t export_key "$password" C-m
-
-    # Poll for output with incremental waits
-    waited=0
-    while [ $waited -lt 12 ] && ([ -z "$private_bls_key" ] || [ ${#private_bls_key} -le 30 ]); do
-        sleep 2
-        waited=$((waited + 2))
-        tmux_output=$(tmux capture-pane -t export_key -S - -E - -p 2>/dev/null)
-
-        # Try to extract from box format first - this is the most reliable
-        private_bls_key=$(printf "%s\n" "$tmux_output" | awk '/\/\/.*[0-9].*\/\// {
-            # Remove // markers and spaces
-            gsub(/\/\//, "");
-            gsub(/ /, "");
-            # Only print if we have a reasonable length (64+)
-            if (length($0) >= 64) {
-                print $0;
-                exit;
-            }
-        }')
-
-        if [ -z "$private_bls_key" ] || [ ${#private_bls_key} -le 30 ]; then
-            # Fallback: try to find line with "Private key:" and get next line
-            private_bls_key=$(printf "%s\n" "$tmux_output" | awk '/Private key:/{getline; print; exit}' | tr -d '[:space:]')
-        fi
-    done
-
-    # Clean up tmux session
-    tmux kill-session -t export_key 2>/dev/null || true
-
-    if [ -z "$private_bls_key" ] || [ ${#private_bls_key} -le 30 ]; then
-        echo "[register] Export attempt $attempt failed (key length: ${#private_bls_key}); retrying..."
-        private_bls_key=""
-        attempt=$((attempt + 1))
-        sleep 2
-    fi
-done
-
-if [ -z "$private_bls_key" ]; then
-    echo "Error: Failed to extract BLS private key for $new_account"
-    echo "BLS key file exists at: $HOME/.eigenlayer/operator_keys/${new_account}.bls.key.json"
-    echo "Try running the container again or check the eigenlayer CLI version"
+echo "[register] Exporting BLS private key..."
+private_bls_key=$(./get_bls_key.sh "$password" "$new_account")
+if [ $? -ne 0 ]; then
+    echo "Error: Failed to export BLS key for $new_account"
     exit 1
 fi
 
