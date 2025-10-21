@@ -67,25 +67,61 @@ fi
 
 new_account="testacc${new_num}"
 ecdsa_keystore_path="${HOME}/.nodes/operator_keys/${new_account}.ecdsa.key.json"
-bls_keystore_path="${HOME}/.nodes/operator_keys/${new_account}.bls.key.json"
 password="Testacc1Testacc1"
 
+echo "[register] Importing ECDSA key for $new_account..."
 echo $password | eigenlayer keys import --insecure --key-type ecdsa $new_account $PRIVATE_KEY
 cp $HOME/.eigenlayer/operator_keys/${new_account}.ecdsa.key.json $HOME/.nodes/operator_keys/${new_account}.ecdsa.key.json
-echo $password |  eigenlayer keys create --key-type bls --insecure $new_account
-private_bls_key=$(./get_bls_key.sh "$password" "$new_account")
+echo "[register] ECDSA key imported successfully"
+
+echo "[register] Creating BLS key for $new_account using crypto-libs..."
+# Generate BLS key using our custom tool
+bls_keystore_tmp_path="${HOME}/.nodes/operator_keys/${new_account}.bls.key.json"
+echo "[register] Generating BN254 BLS key pair..."
+bls_output=$(blskeygen "$bls_keystore_tmp_path" "$password")
 if [ $? -ne 0 ]; then
-    echo "Error: Failed to get bls key for $new_account"
+    echo "[register] ERROR: Failed to generate BLS key for $new_account"
+    echo "[register] blskeygen output: $bls_output"
     exit 1
 fi
+echo "[register] BLS key pair generated successfully"
+
+# Parse the JSON output
+echo "[register] Parsing BLS key from output..."
+private_bls_key=$(echo "$bls_output" | jq -r '.privateKey')
+
+if [ -z "$private_bls_key" ] || [ "$private_bls_key" = "null" ]; then
+    echo "[register] ERROR: Failed to extract BLS private key from blskeygen output"
+    echo "[register] Output was: $bls_output"
+    exit 1
+fi
+echo "[register] BLS private key extracted successfully"
+
+# Validate BLS key (should be a decimal uint256, typically 77-78 digits)
+key_length=${#private_bls_key}
+echo "[register] Validating BLS key..."
+echo "[register] Key length: ${key_length} characters (decimal uint256)"
+echo "[register] Key value: ${private_bls_key}"
+# BN254 field order is ~254 bits, which is ~77 decimal digits
+if [ $key_length -lt 70 ]; then
+    echo "[register] ERROR: BLS private key is too short (${key_length} characters). Expected ~77 digits for uint256."
+    exit 1
+fi
+echo "[register] ✓ BLS key validation passed (${key_length} digit uint256)"
+
+echo "[register] Importing BLS key to signer service..."
 result=$(grpcurl -plaintext -d '{"privateKey": "'"$private_bls_key"'", "password": "'"$password"'"}' signer:50051  keymanager.v1.KeyManager/ImportKey | jq -r '.publicKey' | tr -d '\n')
 if [ $? -ne 0 ]; then
-    echo "Error: Failed to import bls key for $new_account"
-    echo "$result"
+    echo "[register] ERROR: Failed to import BLS key to signer for $new_account"
+    echo "[register] Signer response: $result"
     exit 1
 fi
+echo "[register] BLS key imported to signer successfully"
+echo "[register] BLS public key: $result"
 
+echo "[register] Writing key files..."
 echo -n "$result" > $HOME/.nodes/operator_keys/${new_account}.bls.identifier
 printf '{"privateKey":"%s"}' "$private_bls_key" > $HOME/.nodes/operator_keys/${new_account}.private.bls.key.json
 printf '{"privateKey":"%s","publicKey":"%s"}' "$PRIVATE_KEY" "$ADDRESS" > $HOME/.nodes/operator_keys/${new_account}.private.ecdsa.key.json
-cp $HOME/.eigenlayer/operator_keys/${new_account}.bls.key.json $HOME/.nodes/operator_keys/${new_account}.bls.key.json
+# BLS keystore already generated at $HOME/.nodes/operator_keys/${new_account}.bls.key.json
+echo "[register] ✓ Key files written successfully for $new_account"
