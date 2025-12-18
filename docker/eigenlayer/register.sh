@@ -45,9 +45,18 @@ if [ $? -ne 0 ]; then
     echo "Error: Failed to approve LST for $STRATEGY_MANAGER_ADDRESS"
     exit 1
 fi
-cast send $STRATEGY_MANAGER_ADDRESS "depositIntoStrategy(address,address,uint256)" $LST_STRATEGY_ADDRESS $LST_CONTRACT_ADDRESS 10000000000000000 --private-key $PRIVATE_KEY --rpc-url $RPC_URL  > /dev/null 2>&1
+# Check stETH balance after minting
+STETH_BALANCE=$(cast call $LST_CONTRACT_ADDRESS "balanceOf(address)(uint256)" $ADDRESS --rpc-url $RPC_URL 2>&1)
+echo "[register] stETH balance after mint: $STETH_BALANCE"
+
+# Deposit into strategy
+DEPOSIT_OUTPUT=$(cast send $STRATEGY_MANAGER_ADDRESS "depositIntoStrategy(address,address,uint256)" $LST_STRATEGY_ADDRESS $LST_CONTRACT_ADDRESS 10000000000000000 --private-key $PRIVATE_KEY --rpc-url $RPC_URL 2>&1)
 if [ $? -ne 0 ]; then
     echo "Error: Failed to deposit into strategy for $LST_STRATEGY_ADDRESS"
+    echo "Deposit error output: $DEPOSIT_OUTPUT"
+    echo "Strategy Manager: $STRATEGY_MANAGER_ADDRESS"
+    echo "LST Strategy: $LST_STRATEGY_ADDRESS"
+    echo "LST Contract: $LST_CONTRACT_ADDRESS"
     exit 1
 fi
 cast send $DELEGATION_MANAGER_ADDRESS "registerAsOperator(address,uint32,string)" "$ADDRESS"  "1" "foo.bar" --private-key $PRIVATE_KEY --rpc-url $RPC_URL > /dev/null 2>&1
