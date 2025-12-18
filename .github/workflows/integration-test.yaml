@@ -33,7 +33,7 @@ jobs:
           ALLOCATION_MANAGER_ADDRESS=0x42583067658071247ec8CE0A516A58f682002d07
 
           # Network Configuration
-          FORK_URL=https://sepolia.drpc.org
+          FORK_URL=https://ethereum-sepolia-rpc.publicnode.com
           RPC_URL=http://ethereum:8545
           ENVIRONMENT=LOCAL
 
