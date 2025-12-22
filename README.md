@@ -29,7 +29,7 @@ Relies on [BLS-middleware](https://github.com/BreadchainCoop/bls-middleware)
 
    ### Network Configuration
    ```
-   FORK_URL=                    # URL of the RPC to fork from (Ethereum/Holesky/Sepolia)
+   FORK_URL=                    # URL of the RPC to fork from (Ethereum/Sepolia)
    RPC_URL=http://ethereum:8545 # Local RPC endpoint, change to a live endpoint when running on testnet
    ENVIRONMENT=LOCAL            # Environment mode (LOCAL, MAINNET or TESTNET)
    ```
@@ -65,63 +65,6 @@ Relies on [BLS-middleware](https://github.com/BreadchainCoop/bls-middleware)
 Note that the nodes and node selector only start up after the eigenlayer setup container has exited  
 
 ## Running in TESTNET Mode
-
-To run the service in TESTNET mode (Holesky), follow these steps:
-
-1. Update your `.env` file with the following changes:
-
-   a. Change the environment to TESTNET:
-   ```
-   ENVIRONMENT=TESTNET
-   ```
-
-   b. Set up your RPC URLs:
-   ```
-   # It's reccomended to get a paid RPC URL for non-flakey behavior
-   FORK_URL=https://holesky.rpc # Not a real RPC
-   RPC_URL=https://holesky.rpc # Not a real RPC
-   ```
-
-   c. Uncomment and use the testnet configuration addresses (The following are the addresses for the Holesky Testnet):
-   ```
-   DELEGATION_MANAGER_ADDRESS=0xA44151489861Fe9e3055d95adC98FbD462B948e7
-   STRATEGY_MANAGER_ADDRESS=0xdfB5f6CE42aAA7830E94ECFCcAd411beF4d4D5b6
-   LST_CONTRACT_ADDRESS=0x3F1c547b21f65e10480dE3ad8E19fAAC46C95034
-   LST_STRATEGY_ADDRESS=0x7D704507b76571a51d9caE8AdDAbBFd0ba0e63d3
-   BLS_SIGNATURE_CHECKER_ADDRESS=0xca249215e082e17c12bb3c4881839a3f883e5c6b
-   OPERATOR_STATE_RETRIEVER_ADDRESS=0xB4baAfee917fb4449f5ec64804217bccE9f46C67
-   ALLOCATION_MANAGER_ADDRESS=0x78469728304326CBc65f8f95FA756B0B73164462
-   ```
-
-   d. Set up your testnet keys:
-   ```
-   # Generate a new private key or use an existing one with testnet ETH (the funded key will be used to transfer money to the PRIVATE_KEY account)
-   PRIVATE_KEY=your_private_key_here
-   FUNDED_KEY=your_funded_private_key_here
-   ```
-
-2. Get Testnet ETH:
-   - Visit the [Holesky Faucet](https://holesky-faucet.pk910.de/) to get testnet ETH
-   - Send some ETH to both your `PRIVATE_KEY` and `FUNDED_KEY` addresses
-   - You can check your balance using [Holesky Etherscan](https://holesky.etherscan.io/)
-
-3. Build and start the services (assuming you have already built the images):
-   ```
-   # First, build the services with no cache (unless already built)
-   docker-compose build --no-cache
-   
-   # Then start the services
-   docker-compose up
-   ```
-
-4. Monitor the deployment:
-   - The setup process will take longer in TESTNET mode due to real network conditions
-   - Check the logs for any errors or issues
-   - You can monitor transactions on [Holesky Etherscan](https://holesky.etherscan.io/)
-
-Note: Make sure you have enough testnet ETH in both your `PRIVATE_KEY` and `FUNDED_KEY` accounts before starting the deployment. The deployment process requires multiple transactions and will fail if there's insufficient balance.
-
-## Running in TESTNET Mode (Sepolia)
 
 To run the service in TESTNET mode on Sepolia, follow these steps:
 
