@@ -36,12 +36,8 @@ COPY --from=go-builder /go/bin/grpcurl /usr/local/bin/
 COPY --from=go-builder /go/bin/blskeygen /usr/local/bin/
 
 # Clone and build BLS middleware contracts
-# Note: Using sepolia-local-mode branch until PR #23 is merged to dev
-# https://github.com/BreadchainCoop/bls-middleware/pull/23
 RUN git clone --recurse-submodules https://github.com/BreadchainCoop/bls-middleware.git && \
-    cd bls-middleware && \
-    git checkout RonTuretzky/sepolia-local-mode && \
-    cd contracts && \
+    cd bls-middleware/contracts && \
     forge build
 
 # Set working directory to root (scripts handle navigation internally)
