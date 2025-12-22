@@ -29,7 +29,7 @@ Relies on [BLS-middleware](https://github.com/BreadchainCoop/bls-middleware)
 
    ### Network Configuration
    ```
-   FORK_URL=                    # URL of the RPC to fork from (Ethereum/Holesky)
+   FORK_URL=                    # URL of the RPC to fork from (Ethereum/Sepolia)
    RPC_URL=http://ethereum:8545 # Local RPC endpoint, change to a live endpoint when running on testnet
    ENVIRONMENT=LOCAL            # Environment mode (LOCAL, MAINNET or TESTNET)
    ```
@@ -66,7 +66,7 @@ Note that the nodes and node selector only start up after the eigenlayer setup c
 
 ## Running in TESTNET Mode
 
-To run the service in TESTNET mode (Holesky), follow these steps:
+To run the service in TESTNET mode on Sepolia, follow these steps:
 
 1. Update your `.env` file with the following changes:
 
@@ -77,49 +77,70 @@ To run the service in TESTNET mode (Holesky), follow these steps:
 
    b. Set up your RPC URLs:
    ```
-   # It's reccomended to get a paid RPC URL for non-flakey behavior
-   FORK_URL=https://holesky.rpc # Not a real RPC
-   RPC_URL=https://holesky.rpc # Not a real RPC
+   # It's recommended to get a paid RPC URL for non-flakey behavior
+   FORK_URL=https://sepolia.infura.io/v3/YOUR_API_KEY
+   RPC_URL=https://sepolia.infura.io/v3/YOUR_API_KEY
    ```
 
-   c. Uncomment and use the testnet configuration addresses (The following are the addresses for the Holesky Testnet):
+   c. Uncomment and use the Sepolia configuration addresses:
    ```
-   DELEGATION_MANAGER_ADDRESS=0xA44151489861Fe9e3055d95adC98FbD462B948e7
-   STRATEGY_MANAGER_ADDRESS=0xdfB5f6CE42aAA7830E94ECFCcAd411beF4d4D5b6
-   LST_CONTRACT_ADDRESS=0x3F1c547b21f65e10480dE3ad8E19fAAC46C95034
-   LST_STRATEGY_ADDRESS=0x7D704507b76571a51d9caE8AdDAbBFd0ba0e63d3
-   BLS_SIGNATURE_CHECKER_ADDRESS=0xca249215e082e17c12bb3c4881839a3f883e5c6b
-   OPERATOR_STATE_RETRIEVER_ADDRESS=0xB4baAfee917fb4449f5ec64804217bccE9f46C67
-   ALLOCATION_MANAGER_ADDRESS=0x78469728304326CBc65f8f95FA756B0B73164462
+   DELEGATION_MANAGER_ADDRESS=0xD4A7E1Bd8015057293f0D0A557088c286942e84b
+   STRATEGY_MANAGER_ADDRESS=0x2E3D6c0744b10eb0A4e6F679F71554a39Ec47a5D
+   LST_CONTRACT_ADDRESS=0x00c71b0fcadE911B2feeE9912DE4Fe19eB04ca56
+   LST_STRATEGY_ADDRESS=0x8b29d91e67b013e855EaFe0ad704aC4Ab086a574
+   ALLOCATION_MANAGER_ADDRESS=0x42583067658071247ec8CE0A516A58f682002d07
    ```
 
    d. Set up your testnet keys:
    ```
-   # Generate a new private key or use an existing one with testnet ETH (the funded key will be used to transfer money to the PRIVATE_KEY account)
+   # Generate a new private key or use an existing one with testnet ETH
    PRIVATE_KEY=your_private_key_here
    FUNDED_KEY=your_funded_private_key_here
    ```
 
 2. Get Testnet ETH:
-   - Visit the [Holesky Faucet](https://holesky-faucet.pk910.de/) to get testnet ETH
+   - Visit the [Sepolia Faucet](https://www.alchemy.com/faucets/ethereum-sepolia) to get testnet ETH
    - Send some ETH to both your `PRIVATE_KEY` and `FUNDED_KEY` addresses
-   - You can check your balance using [Holesky Etherscan](https://holesky.etherscan.io/)
+   - You can check your balance using [Sepolia Etherscan](https://sepolia.etherscan.io/)
 
-3. Build and start the services (assuming you have already built the images):
+3. Build and start the services:
    ```
-   # First, build the services with no cache (unless already built)
    docker-compose build --no-cache
-   
-   # Then start the services
    docker-compose up
    ```
 
 4. Monitor the deployment:
    - The setup process will take longer in TESTNET mode due to real network conditions
    - Check the logs for any errors or issues
-   - You can monitor transactions on [Holesky Etherscan](https://holesky.etherscan.io/)
+   - You can monitor transactions on [Sepolia Etherscan](https://sepolia.etherscan.io/)
 
-Note: Make sure you have enough testnet ETH in both your `PRIVATE_KEY` and `FUNDED_KEY` accounts before starting the deployment. The deployment process requires multiple transactions and will fail if there's insufficient balance.
+Note: Due to Sepolia's permissioned validator set, EigenPod functionality is PAUSED on Sepolia. Sepolia is recommended for AVS development as EigenLayer announced support for Sepolia as the primary testnet for AVS development.
+
+## Running Local Mode with Sepolia Fork
+
+To run locally while forking from Sepolia (useful for testing against real Sepolia state):
+
+1. Update your `.env` file:
+   ```
+   ENVIRONMENT=LOCAL
+   FORK_URL=https://sepolia.infura.io/v3/YOUR_API_KEY
+   RPC_URL=http://ethereum:8545
+
+   # Use Sepolia addresses
+   DELEGATION_MANAGER_ADDRESS=0xD4A7E1Bd8015057293f0D0A557088c286942e84b
+   STRATEGY_MANAGER_ADDRESS=0x2E3D6c0744b10eb0A4e6F679F71554a39Ec47a5D
+   LST_CONTRACT_ADDRESS=0x00c71b0fcadE911B2feeE9912DE4Fe19eB04ca56
+   LST_STRATEGY_ADDRESS=0x8b29d91e67b013e855EaFe0ad704aC4Ab086a574
+   ALLOCATION_MANAGER_ADDRESS=0x42583067658071247ec8CE0A516A58f682002d07
+   ```
+
+2. Build and start the services:
+   ```
+   docker-compose build --no-cache
+   docker-compose up
+   ```
+
+This mode forks from Sepolia at the current block and runs a local anvil node. The existing EigenLayer contracts on Sepolia will be available, and the setup script will deploy the AVS contracts on top.
 
 ## Services
 
