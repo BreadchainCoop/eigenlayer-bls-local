@@ -57,10 +57,10 @@ Relies on [BLS-middleware](https://github.com/BreadchainCoop/bls-middleware)
 2. Build and start the services:
    ```
    # First, build the services with no cache
-   docker-compose build --no-cache
+   docker compose build --no-cache
    
    # Then start the services
-   docker-compose up
+   docker compose up
    ```
 Note that the nodes and node selector only start up after the eigenlayer setup container has exited  
 
