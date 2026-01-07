@@ -1,0 +1,9 @@
+# Diagnostic docker-compose override
+# Usage: docker compose -f docker-compose.yml -f docker-compose.diagnostic.yml up --build
+# This uses the diagnostic Dockerfile that outputs full errors from deployment scripts
+
+services:
+  eigenlayer:
+    build:
+      context: .
+      dockerfile: docker/eigenlayer/Dockerfile.diagnostic
