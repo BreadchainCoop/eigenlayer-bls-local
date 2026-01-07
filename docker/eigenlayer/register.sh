@@ -53,7 +53,7 @@ fi
 STETH_BALANCE=$(cast call $LST_CONTRACT_ADDRESS "balanceOf(address)(uint256)" $ADDRESS --rpc-url $RPC_URL 2>&1)
 echo "[register] stETH balance after mint: $STETH_BALANCE"
 
-# Deposit into strategy (amount matches mint)
+# Deposit into strategy
 DEPOSIT_OUTPUT=$(cast send $STRATEGY_MANAGER_ADDRESS "depositIntoStrategy(address,address,uint256)" $LST_STRATEGY_ADDRESS $LST_CONTRACT_ADDRESS $STAKE_AMOUNT --private-key $PRIVATE_KEY --rpc-url $RPC_URL 2>&1)
 if [ $? -ne 0 ]; then
     echo "Error: Failed to deposit into strategy for $LST_STRATEGY_ADDRESS"
