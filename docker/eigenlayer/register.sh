@@ -16,11 +16,15 @@ if [ -z "$RPC_URL" ]; then
   exit 1
 fi
 
+# 0.0001 ETH - used for minting LST and depositing into strategy
+STAKE_AMOUNT=100000000000000
+
 ACCOUNT_INFO=$(cast wallet new --json)
 PRIVATE_KEY=$(echo "$ACCOUNT_INFO" | jq -r '.[0].private_key')
 ADDRESS=$(echo "$ACCOUNT_INFO" | jq -r '.[0].address')
 if [ "$ENVIRONMENT" = "TESTNET" ]; then
-        cast s $ADDRESS --value 500000000000000000 --private-key "$FUNDED_KEY" -r "$RPC_URL" > /dev/null 2>&1
+        # STAKE_AMOUNT + 0.0001 ETH for gas
+        cast s $ADDRESS --value $((STAKE_AMOUNT + 100000000000000)) --private-key "$FUNDED_KEY" -r "$RPC_URL" > /dev/null 2>&1
         if [ $? -ne 0 ]; then
             echo "Error: Failed to give operator $index balance"
             exit 1
@@ -35,7 +39,7 @@ if [ "$ENVIRONMENT" = "TESTNET" ]; then
 
 
 MINT_FUNCTION="submit(address)"
-cast send $LST_CONTRACT_ADDRESS "$MINT_FUNCTION" "0x0000000000000000000000000000000000000000" --private-key $PRIVATE_KEY --value 10000000000000000 --rpc-url $RPC_URL > /dev/null 2>&1
+cast send $LST_CONTRACT_ADDRESS "$MINT_FUNCTION" "0x0000000000000000000000000000000000000000" --private-key $PRIVATE_KEY --value $STAKE_AMOUNT --rpc-url $RPC_URL > /dev/null 2>&1
 if [ $? -ne 0 ]; then
     echo "Error: Failed to mint LST for $ADDRESS"
     exit 1
@@ -50,7 +54,7 @@ STETH_BALANCE=$(cast call $LST_CONTRACT_ADDRESS "balanceOf(address)(uint256)" $A
 echo "[register] stETH balance after mint: $STETH_BALANCE"
 
 # Deposit into strategy
-DEPOSIT_OUTPUT=$(cast send $STRATEGY_MANAGER_ADDRESS "depositIntoStrategy(address,address,uint256)" $LST_STRATEGY_ADDRESS $LST_CONTRACT_ADDRESS 10000000000000000 --private-key $PRIVATE_KEY --rpc-url $RPC_URL 2>&1)
+DEPOSIT_OUTPUT=$(cast send $STRATEGY_MANAGER_ADDRESS "depositIntoStrategy(address,address,uint256)" $LST_STRATEGY_ADDRESS $LST_CONTRACT_ADDRESS $STAKE_AMOUNT --private-key $PRIVATE_KEY --rpc-url $RPC_URL 2>&1)
 if [ $? -ne 0 ]; then
     echo "Error: Failed to deposit into strategy for $LST_STRATEGY_ADDRESS"
     echo "Deposit error output: $DEPOSIT_OUTPUT"
