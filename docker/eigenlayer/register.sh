@@ -39,9 +39,12 @@ if [ "$ENVIRONMENT" = "TESTNET" ]; then
 
 
 MINT_FUNCTION="submit(address)"
-cast send $LST_CONTRACT_ADDRESS "$MINT_FUNCTION" "0x0000000000000000000000000000000000000000" --private-key $PRIVATE_KEY --value $STAKE_AMOUNT --rpc-url $RPC_URL > /dev/null 2>&1
+MINT_OUTPUT=$(cast send $LST_CONTRACT_ADDRESS "$MINT_FUNCTION" "0x0000000000000000000000000000000000000000" --private-key $PRIVATE_KEY --value $STAKE_AMOUNT --rpc-url $RPC_URL 2>&1)
 if [ $? -ne 0 ]; then
     echo "Error: Failed to mint LST for $ADDRESS"
+    echo "Mint error output: $MINT_OUTPUT"
+    echo "LST Contract: $LST_CONTRACT_ADDRESS"
+    echo "Stake Amount: $STAKE_AMOUNT"
     exit 1
 fi
 cast send $LST_CONTRACT_ADDRESS "approve(address,uint256)" $STRATEGY_MANAGER_ADDRESS 1000000000000000000000000 --private-key $PRIVATE_KEY --rpc-url $RPC_URL > /dev/null 2>&1
