@@ -23,8 +23,8 @@ ACCOUNT_INFO=$(cast wallet new --json)
 PRIVATE_KEY=$(echo "$ACCOUNT_INFO" | jq -r '.[0].private_key')
 ADDRESS=$(echo "$ACCOUNT_INFO" | jq -r '.[0].address')
 if [ "$ENVIRONMENT" = "TESTNET" ]; then
-        # STAKE_AMOUNT + 0.0004 ETH for gas (Sepolia gas prices require more buffer)
-        cast s $ADDRESS --value $((STAKE_AMOUNT + 400000000000000)) --private-key "$FUNDED_KEY" -r "$RPC_URL" > /dev/null 2>&1
+        # STAKE_AMOUNT + 0.002 ETH for gas (Sepolia gas prices require more buffer)
+        cast s $ADDRESS --value $((STAKE_AMOUNT + 2000000000000000)) --private-key "$FUNDED_KEY" -r "$RPC_URL" > /dev/null 2>&1
         if [ $? -ne 0 ]; then
             echo "Error: Failed to give operator $index balance"
             exit 1
