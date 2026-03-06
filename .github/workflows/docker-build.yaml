@@ -11,16 +11,18 @@ on:
       - dev
       - staging
     paths:
-      - '.github/workflows/**'
-      - 'docker/eigenlayer/**'
-      - 'docker/ethereum/**'
+      - ".github/workflows/**"
+      - "docker/eigenlayer/**"
+      - "docker/ethereum/**"
   pull_request:
     branches:
+      - main
       - dev
+      - staging
     paths:
-      - '.github/workflows/**'
-      - 'docker/eigenlayer/**'
-      - 'docker/ethereum/**'
+      - ".github/workflows/**"
+      - "docker/eigenlayer/**"
+      - "docker/ethereum/**"
   workflow_dispatch:
 
 jobs:
