@@ -37,6 +37,7 @@ jobs:
         run: |
           OWNER_LOWER="$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
           SHORT_SHA="$(echo "${GITHUB_SHA}" | cut -c1-7)"
+          DEFAULT_BRANCH="${{ github.event.repository.default_branch }}"
 
           # Determine if this is a pull request
           if [ "${{ github.event_name }}" = "pull_request" ]; then
@@ -45,11 +46,11 @@ jobs:
             # Sanitize branch name for use as Docker tag (replace / with -)
             CHANNEL_TAG="pr-$(echo "${BRANCH_NAME}" | sed 's/[^a-zA-Z0-9._-]/-/g')"
           else
-            # For pushes, use channel tag from branch
+            # For pushes, use channel tag from branch (default branch gets "latest")
             case "${GITHUB_REF_NAME}" in
-              main)    CHANNEL_TAG="latest"  ;;
-              dev)     CHANNEL_TAG="dev"     ;;
-              staging) CHANNEL_TAG="staging" ;;
+              ${DEFAULT_BRANCH}) CHANNEL_TAG="latest"  ;;
+              dev)               CHANNEL_TAG="dev"     ;;
+              staging)           CHANNEL_TAG="staging" ;;
               *) echo "Unsupported branch: ${GITHUB_REF_NAME}"; exit 1 ;;
             esac
           fi
