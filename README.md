@@ -18,13 +18,11 @@ Relies on [BLS-middleware](https://github.com/BreadchainCoop/bls-middleware)
    ### Mainnet/Testnet Configuration
    Choose one set of addresses based on your target network:
    ```
+   ALLOCATION_MANAGER_ADDRESS=  # Address of the allocation manager
    DELEGATION_MANAGER_ADDRESS=  # Address of the delegation manager contract
    STRATEGY_MANAGER_ADDRESS=    # Address of the strategy manager contract
    LST_CONTRACT_ADDRESS=        # Address of the LST contract
    LST_STRATEGY_ADDRESS=        # Address of the LST strategy contract
-   BLS_SIGNATURE_CHECKER_ADDRESS= # Address of the BLS signature checker
-   OPERATOR_STATE_RETRIEVER_ADDRESS= # Address of the operator state retriever
-   ALLOCATION_MANAGER_ADDRESS=  # Address of the allocation manager
    ```
 
    ### Network Configuration
