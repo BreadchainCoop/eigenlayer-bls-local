@@ -79,7 +79,13 @@ fi
 
 export PRIVATE_KEY=$DEPLOYER_KEY
 chain_id=$(cast chain-id --rpc-url $RPC_URL)
-cd bls-middleware/contracts && forge script script/IncredibleSquaringDeployer.s.sol --rpc-url $RPC_URL --skip src/libraries/BN256G2.sol --optimize --broadcast --private-key $PRIVATE_KEY > /dev/null 2>&1
+cd bls-middleware/contracts && forge script script/IncredibleSquaringDeployer.s.sol \
+       --rpc-url $RPC_URL               \
+       --private-key $PRIVATE_KEY       \
+       --skip src/libraries/BN256G2.sol \
+       --optimize                       \
+       --broadcast                      \
+       > /dev/null 2>&1
 if [ $? -ne 0 ]; then
     echo "Error: Failed to run middleware deployment script"
 fi
@@ -93,6 +99,36 @@ if [ -z "$REGISTRY_COORDINATOR_ADDRESS" ] || [ "$REGISTRY_COORDINATOR_ADDRESS" =
     exit 1
 fi
 export REGISTRY_COORDINATOR_ADDRESS
+
+###############################################################################
+# Deploy AvsServiceManagerWrapper
+###############################################################################
+echo "Deploying AvsServiceManagerWrapper..."
+
+SERVICE_MANAGER_ADDRESS=$(cat ~/.nodes/avs_deploy.json | jq -r '.addresses.IncredibleSquaringServiceManager')
+if [ -z "$SERVICE_MANAGER_ADDRESS" ] || [ "$SERVICE_MANAGER_ADDRESS" = "null" ]; then
+    echo "Error: Failed to get IncredibleSquaringServiceManager address from avs_deploy.json"
+    exit 1
+fi
+export SERVICE_MANAGER_ADDRESS
+
+cd /commonware-restaking-contracts
+forge script script/DeployAvsServiceManagerWrapper.s.sol:DeployAvsServiceManagerWrapper \
+       --rpc-url "$RPC_URL"         \
+       --private-key "$PRIVATE_KEY" \
+       --broadcast                  \
+       > /dev/null 2>&1
+if [ $? -ne 0 ]; then
+    echo "Error: Failed to deploy AvsServiceManagerWrapper"; exit 1
+fi
+echo "AvsServiceManagerWrapper deployed"
+
+AVS_SERVICE_MANAGER_WRAPPER_ADDRESS=$(cat "script/deployments/avs-service-manager-wrapper/$chain_id.json" | jq -r '.addresses.avsServiceManagerWrapper')
+if [ -z "$AVS_SERVICE_MANAGER_WRAPPER_ADDRESS" ] || [ "$AVS_SERVICE_MANAGER_WRAPPER_ADDRESS" = "null" ]; then
+    echo "Error: Failed to read avsServiceManagerWrapper address from deployment JSON"
+    exit 1
+fi
+export AVS_SERVICE_MANAGER_WRAPPER_ADDRESS
 
 ###############################################################################
 # Deploy BLS Signature Check
@@ -118,14 +154,14 @@ if [ ! -d "/bls-middleware/contracts/lib" ]; then
   exit 1
 fi
 
-if [ ! -d "/bls-middleware/contracts/lib/avs-commonware-counter" ]; then
-  echo "Error: /bls-middleware/contracts/lib/avs-commonware-counter directory not found"
-  ls -la /bls-middleware/contracts/lib/
+if [ ! -d "/commonware-restaking-contracts" ]; then
+  echo "Error: /commonware-restaking-contracts directory not found"
+  ls -la /
   exit 1
 fi
 
-cd /bls-middleware/contracts/lib/avs-commonware-counter
-echo "Successfully changed to avs-commonware-counter directory"
+cd /commonware-restaking-contracts
+echo "Successfully changed to commonware-restaking-contracts directory"
 
 forge script script/DeployBLSSigCheck.s.sol:DeployBLSSigCheckScript \
        --rpc-url "$RPC_URL"         \
@@ -140,11 +176,11 @@ echo "BLSSigCheckOperatorStateRetriever deployed"
 # Deploy Counter
 echo "Deploying Counter..."
 
-forge script script/Counter.s.sol:CounterScript \
+forge script script/DeployCounter.s.sol:DeployCounterScript \
        --rpc-url "$RPC_URL"         \
        --private-key "$PRIVATE_KEY" \
        --broadcast                  \
-       > /dev/null 2>&1
+       > /dev/null
 if [ $? -ne 0 ]; then
   echo "Error: Failed to deploy Counter"; exit 1
 fi
@@ -153,24 +189,21 @@ echo "Contract deployment and run complete"
 
 # Merge deployment JSONs
 chain_id=$(cast chain-id --rpc-url $RPC_URL)
-if [ -f "script/deployments/bls-sig-check/$chain_id.json" ] && [ -f "script/deployments/counter/$chain_id.json" ]; then
-    # Read the deployment JSONs
-    bls_sig_check_json=$(cat "script/deployments/bls-sig-check/$chain_id.json")
-    counter_json=$(cat "script/deployments/counter/$chain_id.json")
+if [ -f "script/deployments/bls-sig-check/$chain_id.json" ] && \
+   [ -f "script/deployments/counter/$chain_id.json" ] && \
+   [ -f "script/deployments/avs-service-manager-wrapper/$chain_id.json" ]; then
 
-    # Create temporary files in the current directory
-    echo "$bls_sig_check_json" > bls_sig_check.json
-    echo "$counter_json" > counter.json
+    echo "$( cat "script/deployments/bls-sig-check/$chain_id.json" )" > bls_sig_check.json
+    echo "$( cat "script/deployments/counter/$chain_id.json" )" > counter.json
+    echo "$( cat "script/deployments/avs-service-manager-wrapper/$chain_id.json" )" > wrapper.json
 
-    # Merge the JSONs with the existing avs_deploy.json
-    merged_json=$(jq -s '.[0] * .[1] * .[2]' ~/.nodes/avs_deploy.json counter.json bls_sig_check.json)
+    merged_json=$(jq -s '.[0] * .[1] * .[2] * .[3]' ~/.nodes/avs_deploy.json counter.json bls_sig_check.json wrapper.json)
 
-    # Save to both locations
     echo "$merged_json" > ~/.nodes/avs_deploy.json
-    echo "$merged_json" > ../../avs_deploy.json
-    rm bls_sig_check.json counter.json
+    echo "$merged_json" > /bls-middleware/contracts/avs_deploy.json
+    rm bls_sig_check.json counter.json wrapper.json
 else
-    echo "Error: Could not find deployment JSONs for BLS sig checker or Counter"
+    echo "Error: Could not find deployment JSONs for BLS sig checker, Counter, or AvsServiceManagerWrapper"
     exit 1
 fi
 
