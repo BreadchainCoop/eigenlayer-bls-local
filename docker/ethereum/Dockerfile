@@ -13,4 +13,12 @@ WORKDIR /ethereum
 # --host: Listen on all interfaces (for Docker networking)
 # --port: Expose Anvil on port 8545
 # --code-size-limit: Increase contract code size limit (useful for large contracts)
-ENTRYPOINT anvil --fork-url $FORK_URL --host 0.0.0.0 --port 8545 --code-size-limit 65536
+# --gas-price: Set the gas price to 1000000 (0.001 Gwei)
+# --base-fee: Set the base fee to 1000000 (0.001 Gwei)
+ENTRYPOINT anvil \
+    --fork-url $FORK_URL \
+    --host 0.0.0.0 \
+    --port 8545 \
+    --code-size-limit 65536 \
+    --gas-price 1000000 \
+    --base-fee 1000000

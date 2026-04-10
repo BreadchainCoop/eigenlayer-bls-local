@@ -16,6 +16,7 @@ if [ -z "$STRATEGY_MANAGER_ADDRESS" ]; then
   echo "Error: STRATEGY_MANAGER_ADDRESS is not set in the environment variables."
   exit 1
 fi
+
 if [ -z "$RPC_URL" ]; then
   echo "Error: RPC_URL is not set in the environment variables."
   exit 1
@@ -69,12 +70,12 @@ DEPLOYER_ADDRESS=$(echo "$DEPLOYER_INFO" | jq -r '.[0].address')
 
 if [ "$ENVIRONMENT" = "TESTNET" ]; then
     DEPLOYER_KEY=$FUNDED_KEY
-else
+    DEPLOYER_ADDRESS=$(cast wallet address --private-key $FUNDED_KEY)
+fi
+
+# Top up deployer balance if running against an Anvil node
+if cast rpc anvil_nodeInfo --rpc-url $RPC_URL > /dev/null 2>&1; then
     cast rpc anvil_setBalance $DEPLOYER_ADDRESS 0x10000000000000000000 --rpc-url $RPC_URL > /dev/null 2>&1
-    if [ $? -ne 0 ]; then
-        echo "Error: Failed to set balance for deployer account"
-        exit 1
-    fi
 fi
 
 export PRIVATE_KEY=$DEPLOYER_KEY
@@ -85,9 +86,11 @@ cd bls-middleware/contracts && forge script script/IncredibleSquaringDeployer.s.
        --skip src/libraries/BN256G2.sol \
        --optimize                       \
        --broadcast                      \
-       > /dev/null 2>&1
+       --slow                           \
+       --skip-simulation
 if [ $? -ne 0 ]; then
     echo "Error: Failed to run middleware deployment script"
+    exit 1
 fi
 cp script/deployments/incredible-squaring/$chain_id.json ~/.nodes/avs_deploy.json
 cp script/deployments/incredible-squaring/$chain_id.json avs_deploy.json
@@ -175,12 +178,11 @@ echo "BLSSigCheckOperatorStateRetriever deployed"
 
 # Deploy Counter
 echo "Deploying Counter..."
-
 forge script script/DeployCounter.s.sol:DeployCounterScript \
        --rpc-url "$RPC_URL"         \
        --private-key "$PRIVATE_KEY" \
        --broadcast                  \
-       > /dev/null
+#       > /dev/null
 if [ $? -ne 0 ]; then
   echo "Error: Failed to deploy Counter"; exit 1
 fi
