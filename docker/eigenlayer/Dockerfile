@@ -36,10 +36,10 @@ COPY --from=go-builder /go/bin/grpcurl /usr/local/bin/
 COPY --from=go-builder /go/bin/blskeygen /usr/local/bin/
 
 # Clone and build BLS middleware contracts
-RUN git clone  --recurse-submodules --branch bagelface/remove-commonware-contracts-submodule https://github.com/BreadchainCoop/bls-middleware.git
+RUN git clone  --recurse-submodules https://github.com/BreadchainCoop/bls-middleware.git
 
 # Clone commonware-restaking-contracts directly with all submodules
-RUN git clone --recurse-submodules --branch bagelface/add-service-manager-wrapper https://github.com/BreadchainCoop/commonware-restaking-contracts.git
+RUN git clone --recurse-submodules https://github.com/BreadchainCoop/commonware-restaking-contracts.git
 
 # Set working directory to root (scripts handle navigation internally)
 WORKDIR /
