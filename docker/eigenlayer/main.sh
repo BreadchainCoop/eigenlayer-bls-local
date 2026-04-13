@@ -90,7 +90,7 @@ fi
 # Allow allocation delay to be processed on testnet
 if [ "$ENVIRONMENT" = "TESTNET" ] && [ -z "$IS_ANVIL_RPC" ]; then
     echo "Sleeping for 5 minutes to allow allocation delay to be processed on testnet..."
-    sleep 360
+    sleep 300
 fi
 
 # Create deployer account and fund it
@@ -108,6 +108,10 @@ echo "Using deployer address: $DEPLOYER_ADDRESS"
 if [ -n "$IS_ANVIL_RPC" ]; then
     echo "Topping up deployer balance in Anvil node..."
     cast rpc anvil_setBalance $DEPLOYER_ADDRESS 0x10000000000000000000 --rpc-url $RPC_URL > /dev/null 2>&1
+    if [ $? -ne 0 ]; then
+        echo "Error: Failed to set balance for deployer account"
+        exit 1
+    fi
 fi
 
 # Deploy AVS contracts
@@ -161,7 +165,7 @@ if [ -z "$AVS_SERVICE_MANAGER_WRAPPER_ADDRESS" ] || [ "$AVS_SERVICE_MANAGER_WRAP
 fi
 export AVS_SERVICE_MANAGER_WRAPPER_ADDRESS
 
-# [DEBUG] Check if the directories exists as expected
+# Verify required directories are present before proceeding
 echo "Checking bls-middleware directory structure..."
 if [ ! -d "/bls-middleware" ]; then
   echo "Error: /bls-middleware directory not found"
@@ -245,6 +249,7 @@ forge script script/UAMPermissions.s.sol \
     > /dev/null 2>&1
 if [ $? -ne 0 ]; then
     echo "Error: Failed to run UAMPermissions script"
+    exit 1
 fi
 
 forge script script/SetupMiddleware.s.sol \
@@ -254,6 +259,7 @@ forge script script/SetupMiddleware.s.sol \
     > /dev/null 2>&1
 if [ $? -ne 0 ]; then
     echo "Error: Failed to run SetupMiddleware script"
+    exit 1
 fi
 
 # Get stake registry address once
@@ -321,6 +327,7 @@ for i in $(seq 1 $num_accounts); do
         > /dev/null 2>&1
     if [ $? -ne 0 ]; then
         echo "Error: Failed to register operator $OPERATOR_ADDRESS"
+        exit 1
     fi
     
     WEIGHT=$(cast call $STAKE_REGISTRY "weightOfOperatorForQuorum(uint8,address)(uint96)" 0 $OPERATOR_ADDRESS --rpc-url $RPC_URL)
