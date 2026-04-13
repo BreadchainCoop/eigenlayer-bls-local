@@ -36,7 +36,7 @@ COPY --from=go-builder /go/bin/grpcurl /usr/local/bin/
 COPY --from=go-builder /go/bin/blskeygen /usr/local/bin/
 
 # Clone and build BLS middleware contracts
-RUN git clone  --recurse-submodules https://github.com/BreadchainCoop/bls-middleware.git
+RUN git clone --recurse-submodules https://github.com/BreadchainCoop/bls-middleware.git
 
 # Clone commonware-restaking-contracts directly with all submodules
 RUN git clone --recurse-submodules https://github.com/BreadchainCoop/commonware-restaking-contracts.git

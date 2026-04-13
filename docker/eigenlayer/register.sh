@@ -1,4 +1,5 @@
 #!/bin/sh
+
 if [ -z "$LST_CONTRACT_ADDRESS" ]; then
   echo "Error: LST_CONTRACT_ADDRESS is not set in the environment variables."
   exit 1
@@ -11,32 +12,31 @@ if [ -z "$DELEGATION_MANAGER_ADDRESS" ]; then
   echo "Error: DELEGATION_MANAGER_ADDRESS is not set in the environment variables."
   exit 1
 fi
+
 if [ -z "$RPC_URL" ]; then
   echo "Error: RPC_URL is not set in the environment variables."
   exit 1
 fi
 
-# 0.0001 ETH - used for minting LST and depositing into strategy
+# 0.0001 ETH (Used for minting LST and depositing into strategy)
 STAKE_AMOUNT=100000000000000
-
 ACCOUNT_INFO=$(cast wallet new --json)
 PRIVATE_KEY=$(echo "$ACCOUNT_INFO" | jq -r '.[0].private_key')
 ADDRESS=$(echo "$ACCOUNT_INFO" | jq -r '.[0].address')
 if [ "$ENVIRONMENT" = "TESTNET" ]; then
-        # STAKE_AMOUNT + 0.1 ETH for gas (Sepolia gas prices require more buffer)
-        cast s $ADDRESS --value $((STAKE_AMOUNT + 100000000000000000)) --private-key "$FUNDED_KEY" -r "$RPC_URL" > /dev/null 2>&1
-        if [ $? -ne 0 ]; then
-            echo "Error: Failed to give operator $index balance"
-            exit 1
-        fi
-    else
-        cast rpc anvil_setBalance $ADDRESS 0x10000000000000000000 --rpc-url $RPC_URL > /dev/null 2>&1
-        if [ $? -ne 0 ]; then
-            echo "Error: Failed to set balance for $ADDRESS"
-            exit 1
-        fi
+    # STAKE_AMOUNT + 0.005 ETH for gas
+    cast s $ADDRESS --value $((STAKE_AMOUNT + 5000000000000000)) --private-key "$FUNDED_KEY" -r "$RPC_URL" > /dev/null 2>&1
+    if [ $? -ne 0 ]; then
+        echo "Error: Failed to give operator $index balance"
+        exit 1
     fi
-
+else
+    cast rpc anvil_setBalance $ADDRESS 0x10000000000000000000 --rpc-url $RPC_URL > /dev/null 2>&1
+    if [ $? -ne 0 ]; then
+        echo "Error: Failed to set balance for $ADDRESS"
+        exit 1
+    fi
+fi
 
 MINT_FUNCTION="submit(address)"
 cast send $LST_CONTRACT_ADDRESS "$MINT_FUNCTION" "0x0000000000000000000000000000000000000000" --private-key $PRIVATE_KEY --value $STAKE_AMOUNT --rpc-url $RPC_URL > /dev/null 2>&1

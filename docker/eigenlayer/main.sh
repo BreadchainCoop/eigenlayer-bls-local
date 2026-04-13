@@ -1,5 +1,6 @@
 #!/bin/sh
 
+# Check if the environment variables are set
 if [ -z "$LST_CONTRACT_ADDRESS" ]; then
   echo "Error: LST_CONTRACT_ADDRESS is not set in the environment variables."
   exit 1
@@ -20,10 +21,21 @@ if [ -z "$RPC_URL" ]; then
   echo "Error: RPC_URL is not set in the environment variables."
   exit 1
 fi
-
 if [ -z "$PRIVATE_KEY" ] && [ -z "$FOUNDRY_PRIVATE_KEY" ]; then
   echo "Error: Neither PRIVATE_KEY nor FOUNDRY_PRIVATE_KEY is set in the environment variables."
   exit 1
+fi
+
+# Needed for LOCAL-only allocation delay override (see below)
+if [ "$ENVIRONMENT" = "LOCAL" ] && [ -z "$ALLOCATION_MANAGER_ADDRESS" ]; then
+  echo "Error: ALLOCATION_MANAGER_ADDRESS is not set in the environment variables (required for ENVIRONMENT=LOCAL)."
+  exit 1
+fi
+if [ "$ENVIRONMENT" = "TESTNET" ]; then
+  if [ -z "$FUNDED_KEY" ]; then
+    echo "Error: FUNDED_KEY is not set in the environment variables. This is required for testnet."
+    exit 1
+  fi
 fi
 
 # Use FOUNDRY_PRIVATE_KEY if PRIVATE_KEY is not set
@@ -31,22 +43,32 @@ if [ -z "$PRIVATE_KEY" ]; then
   PRIVATE_KEY="$FOUNDRY_PRIVATE_KEY"
 fi
 
-if [ "$ENVIRONMENT" = "TESTNET" ]; then
-  if [ -z "$FUNDED_KEY" ]; then
-    echo "Error: FUNDED_KEY is not set in the environment variables. This is required for testnet."
-    exit 1
-  fi
-fi
-sleep 10
-
+# Remove any existing operator keys
 rm -rf $HOME/.nodes/operator_keys/*
 
+# Check if the RPC endpoint is live, and wait until it becomes responsive (with retry limit)
+MAX_RETRIES=60
+RETRY_COUNT=0
+while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+    if cast block-number --rpc-url "$RPC_URL" > /dev/null 2>&1; then
+        break
+    else
+        echo "Waiting for RPC at $RPC_URL to become live... (Attempt $((RETRY_COUNT+1))/$MAX_RETRIES)"
+        sleep 1
+        RETRY_COUNT=$((RETRY_COUNT+1))
+    fi
+done
+if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
+    echo "Error: RPC at $RPC_URL not responsive after $MAX_RETRIES attempts."
+    exit 1
+fi
+
+# Create the number of test accounts specified in the environment variables
 if [ -n "$TEST_ACCOUNTS" ]; then
     num_accounts=$TEST_ACCOUNTS
 else
     num_accounts=1
 fi
-
 for i in $(seq 1 $num_accounts); do
     echo "Creating test account $i of $num_accounts"
     ./register.sh
@@ -56,20 +78,35 @@ for i in $(seq 1 $num_accounts); do
     fi
 done
 
-if [ "$ENVIRONMENT" = "TESTNET" ]; then
-    echo "Sleeping for 5 minutes to allow allocation delay to be processed on testnet..."
-    sleep 360
+# Check if the RPC URL is an Anvil node
+if cast rpc anvil_nodeInfo --rpc-url $RPC_URL > /dev/null 2>&1; then
+    echo "Anvil node detected. Proceeding with local node operations..."
+    export IS_ANVIL_RPC=1
+else
+    echo "Non-Anvil node detected. Running in testnet/mainnet mode..."
+    unset IS_ANVIL_RPC
 fi
 
-# deploy script 
+# Allow allocation delay to be processed on testnet
+if [ "$ENVIRONMENT" = "TESTNET" ] && [ -z "$IS_ANVIL_RPC" ]; then
+    echo "Sleeping for 5 minutes to allow allocation delay to be processed on testnet..."
+    sleep 300
+fi
+
 # Create deployer account and fund it
 DEPLOYER_INFO=$(cast wallet new --json)
 DEPLOYER_KEY=$(echo "$DEPLOYER_INFO" | jq -r '.[0].private_key')
 DEPLOYER_ADDRESS=$(echo "$DEPLOYER_INFO" | jq -r '.[0].address')
-
 if [ "$ENVIRONMENT" = "TESTNET" ]; then
     DEPLOYER_KEY=$FUNDED_KEY
-else
+    DEPLOYER_ADDRESS=$(cast wallet address --private-key $FUNDED_KEY)
+fi
+export PRIVATE_KEY=$DEPLOYER_KEY
+echo "Using deployer address: $DEPLOYER_ADDRESS"
+
+# Top up deployer balance if running against an Anvil node
+if [ -n "$IS_ANVIL_RPC" ]; then
+    echo "Topping up deployer balance in Anvil node..."
     cast rpc anvil_setBalance $DEPLOYER_ADDRESS 0x10000000000000000000 --rpc-url $RPC_URL > /dev/null 2>&1
     if [ $? -ne 0 ]; then
         echo "Error: Failed to set balance for deployer account"
@@ -77,8 +114,9 @@ else
     fi
 fi
 
-export PRIVATE_KEY=$DEPLOYER_KEY
+# Deploy AVS contracts
 chain_id=$(cast chain-id --rpc-url $RPC_URL)
+echo "Deploying service manager (IncredibleSquaringServiceManager) contracts..."
 cd bls-middleware/contracts && forge script script/IncredibleSquaringDeployer.s.sol \
        --rpc-url $RPC_URL               \
        --private-key $PRIVATE_KEY       \
@@ -88,6 +126,7 @@ cd bls-middleware/contracts && forge script script/IncredibleSquaringDeployer.s.
        > /dev/null 2>&1
 if [ $? -ne 0 ]; then
     echo "Error: Failed to run middleware deployment script"
+    exit 1
 fi
 cp script/deployments/incredible-squaring/$chain_id.json ~/.nodes/avs_deploy.json
 cp script/deployments/incredible-squaring/$chain_id.json avs_deploy.json
@@ -100,11 +139,8 @@ if [ -z "$REGISTRY_COORDINATOR_ADDRESS" ] || [ "$REGISTRY_COORDINATOR_ADDRESS" =
 fi
 export REGISTRY_COORDINATOR_ADDRESS
 
-###############################################################################
 # Deploy AvsServiceManagerWrapper
-###############################################################################
-echo "Deploying AvsServiceManagerWrapper..."
-
+echo "Deploying service manager wrapper..."
 SERVICE_MANAGER_ADDRESS=$(cat ~/.nodes/avs_deploy.json | jq -r '.addresses.IncredibleSquaringServiceManager')
 if [ -z "$SERVICE_MANAGER_ADDRESS" ] || [ "$SERVICE_MANAGER_ADDRESS" = "null" ]; then
     echo "Error: Failed to get IncredibleSquaringServiceManager address from avs_deploy.json"
@@ -114,14 +150,13 @@ export SERVICE_MANAGER_ADDRESS
 
 cd /commonware-restaking-contracts
 forge script script/DeployAvsServiceManagerWrapper.s.sol:DeployAvsServiceManagerWrapper \
-       --rpc-url "$RPC_URL"         \
-       --private-key "$PRIVATE_KEY" \
-       --broadcast                  \
-       > /dev/null 2>&1
+    --rpc-url "$RPC_URL"         \
+    --private-key "$PRIVATE_KEY" \
+    --broadcast                  \
+    > /dev/null 2>&1
 if [ $? -ne 0 ]; then
     echo "Error: Failed to deploy AvsServiceManagerWrapper"; exit 1
 fi
-echo "AvsServiceManagerWrapper deployed"
 
 AVS_SERVICE_MANAGER_WRAPPER_ADDRESS=$(cat "script/deployments/avs-service-manager-wrapper/$chain_id.json" | jq -r '.addresses.avsServiceManagerWrapper')
 if [ -z "$AVS_SERVICE_MANAGER_WRAPPER_ADDRESS" ] || [ "$AVS_SERVICE_MANAGER_WRAPPER_ADDRESS" = "null" ]; then
@@ -130,30 +165,22 @@ if [ -z "$AVS_SERVICE_MANAGER_WRAPPER_ADDRESS" ] || [ "$AVS_SERVICE_MANAGER_WRAP
 fi
 export AVS_SERVICE_MANAGER_WRAPPER_ADDRESS
 
-###############################################################################
-# Deploy BLS Signature Check
-###############################################################################
-echo "Deploying BLSSigCheckOperatorStateRetriever..."
-
-# Debug: Check if the directory exists and what's in it
+# Verify required directories are present before proceeding
 echo "Checking bls-middleware directory structure..."
 if [ ! -d "/bls-middleware" ]; then
   echo "Error: /bls-middleware directory not found"
   exit 1
 fi
-
 if [ ! -d "/bls-middleware/contracts" ]; then
   echo "Error: /bls-middleware/contracts directory not found"
   ls -la /bls-middleware/
   exit 1
 fi
-
 if [ ! -d "/bls-middleware/contracts/lib" ]; then
   echo "Error: /bls-middleware/contracts/lib directory not found"
   ls -la /bls-middleware/contracts/
   exit 1
 fi
-
 if [ ! -d "/commonware-restaking-contracts" ]; then
   echo "Error: /commonware-restaking-contracts directory not found"
   ls -la /
@@ -163,31 +190,35 @@ fi
 cd /commonware-restaking-contracts
 echo "Successfully changed to commonware-restaking-contracts directory"
 
+# Deploy BLS Signature Check
+echo "Deploying BLSSigCheckOperatorStateRetriever..."
+
 forge script script/DeployBLSSigCheck.s.sol:DeployBLSSigCheckScript \
-       --rpc-url "$RPC_URL"         \
-       --private-key "$PRIVATE_KEY" \
-       --broadcast                  \
-       > /dev/null 2>&1
+    --rpc-url "$RPC_URL"         \
+    --private-key "$PRIVATE_KEY" \
+    --broadcast                  \
+    > /dev/null 2>&1
 if [ $? -ne 0 ]; then
   echo "Error: Failed to deploy BLSSigCheckOperatorStateRetriever"; exit 1
 fi
-echo "BLSSigCheckOperatorStateRetriever deployed"
 
 # Deploy Counter
 echo "Deploying Counter..."
 
 forge script script/DeployCounter.s.sol:DeployCounterScript \
-       --rpc-url "$RPC_URL"         \
-       --private-key "$PRIVATE_KEY" \
-       --broadcast                  \
-       > /dev/null
+    --rpc-url "$RPC_URL"         \
+    --private-key "$PRIVATE_KEY" \
+    --broadcast                  \
+    > /dev/null 2>&1
 if [ $? -ne 0 ]; then
   echo "Error: Failed to deploy Counter"; exit 1
 fi
-echo "Counter deployed"
+
 echo "Contract deployment and run complete"
 
 # Merge deployment JSONs
+echo "Merging deployment JSONs..."
+
 chain_id=$(cast chain-id --rpc-url $RPC_URL)
 if [ -f "script/deployments/bls-sig-check/$chain_id.json" ] && \
    [ -f "script/deployments/counter/$chain_id.json" ] && \
@@ -208,16 +239,27 @@ else
 fi
 
 # Setup middleware
-cd /bls-middleware/contracts
+echo "Setting up middleware..."
 
-forge script script/UAMPermissions.s.sol --rpc-url $RPC_URL --broadcast --private-key $PRIVATE_KEY > /dev/null 2>&1
+cd /bls-middleware/contracts
+forge script script/UAMPermissions.s.sol \
+    --rpc-url $RPC_URL         \
+    --private-key $PRIVATE_KEY \
+    --broadcast                \
+    > /dev/null 2>&1
 if [ $? -ne 0 ]; then
     echo "Error: Failed to run UAMPermissions script"
+    exit 1
 fi
 
-forge script script/SetupMiddleware.s.sol --rpc-url $RPC_URL --broadcast --private-key $PRIVATE_KEY > /dev/null 2>&1
+forge script script/SetupMiddleware.s.sol \
+    --rpc-url $RPC_URL         \
+    --private-key $PRIVATE_KEY \
+    --broadcast                \
+    > /dev/null 2>&1
 if [ $? -ne 0 ]; then
     echo "Error: Failed to run SetupMiddleware script"
+    exit 1
 fi
 
 # Get stake registry address once
@@ -244,7 +286,7 @@ for i in $(seq 1 $num_accounts); do
     
     OPERATOR_ADDRESS=$(cast wallet address --private-key $OPERATOR_PRIVATE_KEY)
     
-    if [ "$ENVIRONMENT" = "local" ]; then
+    if [ "$ENVIRONMENT" = "LOCAL" ]; then
         echo "Getting delegation manager and overriding allocation delay..."
         
         # Set balance and impersonate the delegation manager
@@ -261,18 +303,31 @@ for i in $(seq 1 $num_accounts); do
         fi
         
         # Call the function to override allocation delay
-        cast send $ALLOCATION_MANAGER_ADDRESS "setAllocationDelay(address,uint32)" $OPERATOR_ADDRESS 0 --from $DELEGATION_MANAGER_ADDRESS --unlocked --rpc-url $RPC_URL > /dev/null 2>&1
+        cast send $ALLOCATION_MANAGER_ADDRESS "setAllocationDelay(address,uint32)" $OPERATOR_ADDRESS 0 \
+            --from $DELEGATION_MANAGER_ADDRESS \
+            --rpc-url $RPC_URL                 \
+            --unlocked                         \
+            > /dev/null 2>&1
         if [ $? -ne 0 ]; then
             echo "Error: Failed to override allocation delay"
             exit 1
         fi
     fi
+
     # Set the operator ID for registration
     export OPERATOR_ID="testacc${i}"
-    
-    forge script script/RegisterOperator.s.sol --rpc-url $RPC_URL --broadcast --private-key $OPERATOR_PRIVATE_KEY --isolate --slow --skip-simulation #> /dev/null 2>&1
+
+    forge script script/RegisterOperator.s.sol \
+        --rpc-url "$RPC_URL"                \
+        --private-key $OPERATOR_PRIVATE_KEY \
+        --isolate                           \
+        --slow                              \
+        --skip-simulation                   \
+        --broadcast                         \
+        > /dev/null 2>&1
     if [ $? -ne 0 ]; then
         echo "Error: Failed to register operator $OPERATOR_ADDRESS"
+        exit 1
     fi
     
     WEIGHT=$(cast call $STAKE_REGISTRY "weightOfOperatorForQuorum(uint8,address)(uint96)" 0 $OPERATOR_ADDRESS --rpc-url $RPC_URL)
