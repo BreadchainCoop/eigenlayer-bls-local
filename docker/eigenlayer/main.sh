@@ -1,12 +1,16 @@
 #!/bin/sh
 
 # Check if the environment variables are set
-if [ -z "$LST_CONTRACT_ADDRESS" ]; then
-  echo "Error: LST_CONTRACT_ADDRESS is not set in the environment variables."
+if [ -z "$ALLOCATION_MANAGER_ADDRESS" ]; then
+  echo "Error: ALLOCATION_MANAGER_ADDRESS is not set in the environment variables (required for ENVIRONMENT=LOCAL)."
   exit 1
 fi
 if [ -z "$DELEGATION_MANAGER_ADDRESS" ]; then
   echo "Error: DELEGATION_MANAGER_ADDRESS is not set in the environment variables."
+  exit 1
+fi
+if [ -z "$LST_CONTRACT_ADDRESS" ]; then
+  echo "Error: LST_CONTRACT_ADDRESS is not set in the environment variables."
   exit 1
 fi
 if [ -z "$LST_STRATEGY_ADDRESS" ]; then
@@ -25,17 +29,9 @@ if [ -z "$PRIVATE_KEY" ] && [ -z "$FOUNDRY_PRIVATE_KEY" ]; then
   echo "Error: Neither PRIVATE_KEY nor FOUNDRY_PRIVATE_KEY is set in the environment variables."
   exit 1
 fi
-
-# Needed for LOCAL-only allocation delay override (see below)
-if [ "$ENVIRONMENT" = "LOCAL" ] && [ -z "$ALLOCATION_MANAGER_ADDRESS" ]; then
-  echo "Error: ALLOCATION_MANAGER_ADDRESS is not set in the environment variables (required for ENVIRONMENT=LOCAL)."
+if [ "$ENVIRONMENT" = "TESTNET" ] && [ -z "$FUNDED_KEY" ]; then
+  echo "Error: FUNDED_KEY is not set in the environment variables. This is required for testnet."
   exit 1
-fi
-if [ "$ENVIRONMENT" = "TESTNET" ]; then
-  if [ -z "$FUNDED_KEY" ]; then
-    echo "Error: FUNDED_KEY is not set in the environment variables. This is required for testnet."
-    exit 1
-  fi
 fi
 
 # Use FOUNDRY_PRIVATE_KEY if PRIVATE_KEY is not set
@@ -87,11 +83,6 @@ else
     unset IS_ANVIL_RPC
 fi
 
-# Allow allocation delay to be processed on testnet
-if [ "$ENVIRONMENT" = "TESTNET" ] && [ -z "$IS_ANVIL_RPC" ]; then
-    echo "Sleeping for 5 minutes to allow allocation delay to be processed on testnet..."
-    sleep 300
-fi
 
 # Create deployer account and fund it
 DEPLOYER_INFO=$(cast wallet new --json)
@@ -262,6 +253,50 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
+# On real networks (i.e. not anvil), EigenLayer enforces an ALLOCATION_CONFIGURATION_DELAY
+# (75 blocks on Sepolia, ~15 minutes). SetupMiddleware.s.sol calls modifyAllocations which creates
+# a *pending* allocation; registerForOperatorSets will revert with BelowMinimumStakeRequirement
+# until those blocks have elapsed. Poll each operator until their minimum slashable stake is
+# non-zero before proceeding to RegisterOperator.
+if [ "$ENVIRONMENT" = "TESTNET" ] && [ -z "$IS_ANVIL_RPC" ]; then
+    echo "Waiting for operator allocations to become effective on testnet (ALLOCATION_CONFIGURATION_DELAY)..."
+    AVS_ADDRESS=$(cat ~/.nodes/avs_deploy.json | jq -r '.addresses.IncredibleSquaringServiceManager')
+    if [ -z "$AVS_ADDRESS" ] || [ "$AVS_ADDRESS" = "null" ]; then
+        echo "Error: Failed to get IncredibleSquaringServiceManager address for allocation polling"
+        exit 1
+    fi
+    MAX_WAIT=1800
+    for i in $(seq 1 $num_accounts); do
+        OP_KEY=$(cat ~/.nodes/operator_keys/testacc${i}.private.ecdsa.key.json | jq -r .privateKey)
+        OP_ADDR=$(cast wallet address --private-key $OP_KEY)
+        echo "Polling for operator $i ($OP_ADDR) allocation to become effective..."
+        ELAPSED=0
+        while [ $ELAPSED -lt $MAX_WAIT ]; do
+            STAKE=$(cast call $ALLOCATION_MANAGER_ADDRESS \
+                "getMinimumSlashableStake((address,uint32),address[],address[],uint32)" \
+                "($AVS_ADDRESS,0)" \
+                "[$OP_ADDR]" \
+                "[$LST_STRATEGY_ADDRESS]" \
+                "$(cast block-number --rpc-url $RPC_URL)" \
+                --rpc-url $RPC_URL 2>/dev/null || true)
+            # getMinimumSlashableStake returns a uint96[][] — non-zero looks like [[N]]
+            # Zero allocation returns [[0]] or an error; either way grep for a non-zero hex/decimal
+            if echo "$STAKE" | grep -qE '[1-9][0-9a-fA-F]*'; then
+                echo "Operator $i allocation is now effective (stake: $STAKE)"
+                break
+            fi
+            echo "Allocation not yet effective for operator $i, waiting... (${ELAPSED}s elapsed)"
+            sleep 15
+            ELAPSED=$((ELAPSED + 15))
+        done
+        if [ $ELAPSED -ge $MAX_WAIT ]; then
+            echo "Error: Timed out waiting for operator $i allocation to become effective after ${MAX_WAIT}s"
+            exit 1
+        fi
+    done
+    echo "All operator allocations are effective. Proceeding with registration."
+fi
+
 # Get stake registry address once
 STAKE_REGISTRY=$(cat ~/.nodes/avs_deploy.json | jq -r '.addresses.stakeRegistry')
 if [ -z "$STAKE_REGISTRY" ] || [ "$STAKE_REGISTRY" = "null" ]; then
@@ -286,7 +321,7 @@ for i in $(seq 1 $num_accounts); do
     
     OPERATOR_ADDRESS=$(cast wallet address --private-key $OPERATOR_PRIVATE_KEY)
     
-    if [ "$ENVIRONMENT" = "LOCAL" ]; then
+    if [ -n "$IS_ANVIL_RPC" ]; then
         echo "Getting delegation manager and overriding allocation delay..."
         
         # Set balance and impersonate the delegation manager
