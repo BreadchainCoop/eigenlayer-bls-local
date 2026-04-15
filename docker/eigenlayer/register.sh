@@ -27,7 +27,7 @@ if [ "$ENVIRONMENT" = "TESTNET" ]; then
     # STAKE_AMOUNT + 0.005 ETH for gas
     cast s $ADDRESS --value $((STAKE_AMOUNT + 5000000000000000)) --private-key "$FUNDED_KEY" -r "$RPC_URL" > /dev/null 2>&1
     if [ $? -ne 0 ]; then
-        echo "Error: Failed to give operator $index balance"
+        echo "Error: Failed to give operator $ADDRESS balance"
         exit 1
     fi
 else
