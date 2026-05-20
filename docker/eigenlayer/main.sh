@@ -33,6 +33,18 @@ if [ "$ENVIRONMENT" = "TESTNET" ] && [ -z "$FUNDED_KEY" ]; then
   echo "Error: FUNDED_KEY is not set in the environment variables. This is required for testnet."
   exit 1
 fi
+if [ -z "$QUORUM_THRESHOLD" ]; then
+  echo "Error: QUORUM_THRESHOLD is not set in the environment variables."
+  exit 1
+fi
+if [ -z "$THRESHOLD_DENOMINATOR" ]; then
+  echo "Error: THRESHOLD_DENOMINATOR is not set in the environment variables."
+  exit 1
+fi
+if [ -z "$BLOCK_STALE_MEASURE" ]; then
+  echo "Error: BLOCK_STALE_MEASURE is not set in the environment variables."
+  exit 1
+fi
 
 # Use FOUNDRY_PRIVATE_KEY if PRIVATE_KEY is not set
 if [ -z "$PRIVATE_KEY" ]; then
@@ -138,6 +150,9 @@ if [ -z "$SERVICE_MANAGER_ADDRESS" ] || [ "$SERVICE_MANAGER_ADDRESS" = "null" ];
     exit 1
 fi
 export SERVICE_MANAGER_ADDRESS
+export QUORUM_THRESHOLD
+export THRESHOLD_DENOMINATOR
+export BLOCK_STALE_MEASURE
 
 cd /commonware-restaking-contracts
 forge script script/DeployAvsServiceManagerWrapper.s.sol:DeployAvsServiceManagerWrapper \
