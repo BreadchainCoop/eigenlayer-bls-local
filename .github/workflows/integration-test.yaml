@@ -46,6 +46,11 @@ jobs:
           CERBERUS_GRPC_PORT=50051
           CERBERUS_METRICS_PORT=9081
           SIGNER_ENDPOINT=http://signer:50051
+
+          # AVS Configuration
+          QUORUM_THRESHOLD=2
+          THRESHOLD_DENOMINATOR=3
+          BLOCK_STALE_MEASURE=300
           EOF
 
       - name: Start Docker services
