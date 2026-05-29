@@ -1,5 +1,20 @@
 #!/bin/sh
 
+# Run a cast command, suppressing output on success but printing it in full on failure.
+run_cast() {
+    desc="$1"; shift
+    tmp=$(mktemp)
+    cast "$@" > "$tmp" 2>&1
+    code=$?
+    if [ $code -ne 0 ]; then
+        echo "=== cast failed: $desc ==="
+        cat "$tmp"
+        echo "=== end cast output ==="
+    fi
+    rm -f "$tmp"
+    return $code
+}
+
 if [ -z "$LST_CONTRACT_ADDRESS" ]; then
   echo "Error: LST_CONTRACT_ADDRESS is not set in the environment variables."
   exit 1
@@ -25,13 +40,13 @@ PRIVATE_KEY=$(echo "$ACCOUNT_INFO" | jq -r '.[0].private_key')
 ADDRESS=$(echo "$ACCOUNT_INFO" | jq -r '.[0].address')
 if [ "$ENVIRONMENT" = "TESTNET" ]; then
     # STAKE_AMOUNT + 0.005 ETH for gas
-    cast s $ADDRESS --value $((STAKE_AMOUNT + 5000000000000000)) --private-key "$FUNDED_KEY" -r "$RPC_URL" > /dev/null 2>&1
+    run_cast "fund operator $ADDRESS" s $ADDRESS --value $((STAKE_AMOUNT + 5000000000000000)) --private-key "$FUNDED_KEY" -r "$RPC_URL"
     if [ $? -ne 0 ]; then
         echo "Error: Failed to give operator $ADDRESS balance"
         exit 1
     fi
 else
-    cast rpc anvil_setBalance $ADDRESS 0x10000000000000000000 --rpc-url $RPC_URL > /dev/null 2>&1
+    run_cast "anvil_setBalance $ADDRESS" rpc anvil_setBalance $ADDRESS 0x10000000000000000000 --rpc-url $RPC_URL
     if [ $? -ne 0 ]; then
         echo "Error: Failed to set balance for $ADDRESS"
         exit 1
@@ -39,12 +54,12 @@ else
 fi
 
 MINT_FUNCTION="submit(address)"
-cast send $LST_CONTRACT_ADDRESS "$MINT_FUNCTION" "0x0000000000000000000000000000000000000000" --private-key $PRIVATE_KEY --value $STAKE_AMOUNT --rpc-url $RPC_URL > /dev/null 2>&1
+run_cast "mint LST for $ADDRESS" send $LST_CONTRACT_ADDRESS "$MINT_FUNCTION" "0x0000000000000000000000000000000000000000" --private-key $PRIVATE_KEY --value $STAKE_AMOUNT --rpc-url $RPC_URL
 if [ $? -ne 0 ]; then
     echo "Error: Failed to mint LST for $ADDRESS"
     exit 1
 fi
-cast send $LST_CONTRACT_ADDRESS "approve(address,uint256)" $STRATEGY_MANAGER_ADDRESS 1000000000000000000000000 --private-key $PRIVATE_KEY --rpc-url $RPC_URL > /dev/null 2>&1
+run_cast "approve LST for $STRATEGY_MANAGER_ADDRESS" send $LST_CONTRACT_ADDRESS "approve(address,uint256)" $STRATEGY_MANAGER_ADDRESS 1000000000000000000000000 --private-key $PRIVATE_KEY --rpc-url $RPC_URL
 if [ $? -ne 0 ]; then
     echo "Error: Failed to approve LST for $STRATEGY_MANAGER_ADDRESS"
     exit 1
@@ -63,7 +78,7 @@ if [ $? -ne 0 ]; then
     echo "LST Contract: $LST_CONTRACT_ADDRESS"
     exit 1
 fi
-cast send $DELEGATION_MANAGER_ADDRESS "registerAsOperator(address,uint32,string)" "$ADDRESS"  "1" "foo.bar" --private-key $PRIVATE_KEY --rpc-url $RPC_URL > /dev/null 2>&1
+run_cast "registerAsOperator $ADDRESS" send $DELEGATION_MANAGER_ADDRESS "registerAsOperator(address,uint32,string)" "$ADDRESS" "1" "foo.bar" --private-key $PRIVATE_KEY --rpc-url $RPC_URL
 if [ $? -ne 0 ]; then
     echo "Error: Failed to register as operator for $DELEGATION_MANAGER_ADDRESS"
     exit 1

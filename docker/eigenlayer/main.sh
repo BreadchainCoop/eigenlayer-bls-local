@@ -1,5 +1,20 @@
 #!/bin/sh
 
+# Run a forge script, suppressing output on success but printing it in full on failure.
+run_forge() {
+    desc="$1"; shift
+    tmp=$(mktemp)
+    forge "$@" > "$tmp" 2>&1
+    code=$?
+    if [ $code -ne 0 ]; then
+        echo "=== forge failed: $desc ==="
+        cat "$tmp"
+        echo "=== end forge output ==="
+    fi
+    rm -f "$tmp"
+    return $code
+}
+
 # Check if the environment variables are set
 if [ -z "$ALLOCATION_MANAGER_ADDRESS" ]; then
   echo "Error: ALLOCATION_MANAGER_ADDRESS is not set in the environment variables (required for ENVIRONMENT=LOCAL)."
@@ -120,13 +135,12 @@ fi
 # Deploy AVS contracts
 chain_id=$(cast chain-id --rpc-url $RPC_URL)
 echo "Deploying service manager (IncredibleSquaringServiceManager) contracts..."
-cd bls-middleware/contracts && forge script script/IncredibleSquaringDeployer.s.sol \
+cd bls-middleware/contracts && run_forge "IncredibleSquaringDeployer" script script/IncredibleSquaringDeployer.s.sol \
        --rpc-url $RPC_URL               \
        --private-key $PRIVATE_KEY       \
        --skip src/libraries/BN256G2.sol \
        --optimize                       \
-       --broadcast                      \
-       > /dev/null 2>&1
+       --broadcast
 if [ $? -ne 0 ]; then
     echo "Error: Failed to run middleware deployment script"
     exit 1
@@ -155,11 +169,10 @@ export THRESHOLD_DENOMINATOR
 export BLOCK_STALE_MEASURE
 
 cd /commonware-restaking-contracts
-forge script script/DeployAvsServiceManagerWrapper.s.sol:DeployAvsServiceManagerWrapper \
+run_forge "DeployAvsServiceManagerWrapper" script script/DeployAvsServiceManagerWrapper.s.sol:DeployAvsServiceManagerWrapper \
     --rpc-url "$RPC_URL"         \
     --private-key "$PRIVATE_KEY" \
-    --broadcast                  \
-    > /dev/null 2>&1
+    --broadcast
 if [ $? -ne 0 ]; then
     echo "Error: Failed to deploy AvsServiceManagerWrapper"; exit 1
 fi
@@ -199,11 +212,10 @@ echo "Successfully changed to commonware-restaking-contracts directory"
 # Deploy BLS Signature Check
 echo "Deploying BLSSigCheckOperatorStateRetriever..."
 
-forge script script/DeployBLSSigCheck.s.sol:DeployBLSSigCheckScript \
+run_forge "DeployBLSSigCheck" script script/DeployBLSSigCheck.s.sol:DeployBLSSigCheckScript \
     --rpc-url "$RPC_URL"         \
     --private-key "$PRIVATE_KEY" \
-    --broadcast                  \
-    > /dev/null 2>&1
+    --broadcast
 if [ $? -ne 0 ]; then
   echo "Error: Failed to deploy BLSSigCheckOperatorStateRetriever"; exit 1
 fi
@@ -211,11 +223,10 @@ fi
 # Deploy Counter
 echo "Deploying Counter..."
 
-forge script script/DeployCounter.s.sol:DeployCounterScript \
+run_forge "DeployCounter" script script/DeployCounter.s.sol:DeployCounterScript \
     --rpc-url "$RPC_URL"         \
     --private-key "$PRIVATE_KEY" \
-    --broadcast                  \
-    > /dev/null 2>&1
+    --broadcast
 if [ $? -ne 0 ]; then
   echo "Error: Failed to deploy Counter"; exit 1
 fi
@@ -248,21 +259,19 @@ fi
 echo "Setting up middleware..."
 
 cd /bls-middleware/contracts
-forge script script/UAMPermissions.s.sol \
+run_forge "UAMPermissions" script script/UAMPermissions.s.sol \
     --rpc-url $RPC_URL         \
     --private-key $PRIVATE_KEY \
-    --broadcast                \
-    > /dev/null 2>&1
+    --broadcast
 if [ $? -ne 0 ]; then
     echo "Error: Failed to run UAMPermissions script"
     exit 1
 fi
 
-forge script script/SetupMiddleware.s.sol \
+run_forge "SetupMiddleware" script script/SetupMiddleware.s.sol \
     --rpc-url $RPC_URL         \
     --private-key $PRIVATE_KEY \
-    --broadcast                \
-    > /dev/null 2>&1
+    --broadcast
 if [ $? -ne 0 ]; then
     echo "Error: Failed to run SetupMiddleware script"
     exit 1
@@ -367,14 +376,13 @@ for i in $(seq 1 $num_accounts); do
     # Set the operator ID for registration
     export OPERATOR_ID="testacc${i}"
 
-    forge script script/RegisterOperator.s.sol \
+    run_forge "RegisterOperator (testacc${i})" script script/RegisterOperator.s.sol \
         --rpc-url "$RPC_URL"                \
         --private-key $OPERATOR_PRIVATE_KEY \
         --isolate                           \
         --slow                              \
         --skip-simulation                   \
-        --broadcast                         \
-        > /dev/null 2>&1
+        --broadcast
     if [ $? -ne 0 ]; then
         echo "Error: Failed to register operator $OPERATOR_ADDRESS"
         exit 1
