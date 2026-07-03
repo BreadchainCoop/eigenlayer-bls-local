@@ -10,6 +10,7 @@ on:
       - dev
   pull_request:
     branches:
+      - main
       - dev
   workflow_dispatch:
 
@@ -31,6 +32,7 @@ jobs:
           LST_CONTRACT_ADDRESS=0x00c71b0fcadE911B2feeE9912DE4Fe19eB04ca56
           LST_STRATEGY_ADDRESS=0x8b29d91e67b013e855EaFe0ad704aC4Ab086a574
           ALLOCATION_MANAGER_ADDRESS=0x42583067658071247ec8CE0A516A58f682002d07
+          AVS_DIRECTORY_ADDRESS=0xa789c91ECDdae96865913130B786140Ee17aF545
 
           # Network Configuration
           FORK_URL=https://ethereum-sepolia-rpc.publicnode.com
@@ -241,6 +243,45 @@ jobs:
           fi
           echo "  ✓ Contract code verified at stake registry (${#code_response} bytes)"
 
+          # Gas Killer ECDSA stack (deployed by main.sh; operators registered with it)
+          ecdsa_stake_registry=$(cat ./.nodes/avs_deploy.json | jq -r '.addresses.ecdsaStakeRegistry')
+          if [ -z "$ecdsa_stake_registry" ] || [ "$ecdsa_stake_registry" = "null" ]; then
+            echo "Error: ecdsaStakeRegistry address not found in deployment file"
+            cat ./.nodes/avs_deploy.json
+            exit 1
+          fi
+          echo "  ✓ ECDSA stake registry: $ecdsa_stake_registry"
+
+          gk_service_manager=$(cat ./.nodes/avs_deploy.json | jq -r '.addresses.gasKillerServiceManager')
+          if [ -z "$gk_service_manager" ] || [ "$gk_service_manager" = "null" ]; then
+            echo "Error: gasKillerServiceManager address not found in deployment file"
+            cat ./.nodes/avs_deploy.json
+            exit 1
+          fi
+          echo "  ✓ Gas Killer service manager: $gk_service_manager"
+
+          echo "Verifying contract code at ECDSA stake registry address..."
+          code_response=$(docker compose exec -T ethereum cast code "$ecdsa_stake_registry" --rpc-url http://localhost:8545 2>&1)
+          if [ "$code_response" = "0x" ] || [ -z "$code_response" ]; then
+            echo "Error: No contract code found at ECDSA stake registry address $ecdsa_stake_registry"
+            exit 1
+          fi
+          echo "  ✓ Contract code verified at ECDSA stake registry (${#code_response} bytes)"
+
+          echo "Verifying ECDSA operator registration + threshold..."
+          total_weight=$(docker compose exec -T ethereum cast call "$ecdsa_stake_registry" "getLastCheckpointTotalWeight()(uint256)" --rpc-url http://localhost:8545 | awk '{print $1}')
+          threshold_weight=$(docker compose exec -T ethereum cast call "$ecdsa_stake_registry" "getLastCheckpointThresholdWeight()(uint256)" --rpc-url http://localhost:8545 | awk '{print $1}')
+          echo "  ECDSA total weight: $total_weight, threshold: $threshold_weight"
+          if [ -z "$total_weight" ] || [ "$total_weight" = "0" ]; then
+            echo "Error: ECDSA stake registry has zero total weight (operators not registered)"
+            exit 1
+          fi
+          if [ -z "$threshold_weight" ] || [ "$threshold_weight" = "0" ]; then
+            echo "Error: ECDSA stake registry threshold was not finalized"
+            exit 1
+          fi
+          echo "  ✓ ECDSA operators registered and threshold finalized"
+
           echo "Deployment files validated successfully!"
 
       - name: Test Summary
@@ -255,6 +296,7 @@ jobs:
           echo "  ✓ EigenLayer setup completed"
           echo "  ✓ 3 BLS keys created and validated (all > 30 chars)"
           echo "  ✓ Deployment files created with verified contract code"
+          echo "  ✓ Gas Killer ECDSA stack deployed, operators registered, threshold set"
           echo ""
           echo "All tests passed successfully!"
 
