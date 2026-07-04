@@ -47,7 +47,7 @@ RUN git clone --recurse-submodules https://github.com/BreadchainCoop/commonware-
 # (EigenLayer ECDSAStakeRegistry via the eigenlayer-middleware submodule, the
 # GasKillerServiceManager, and the deploy/registration forge scripts main.sh runs).
 # Pinned to a commit for reproducible builds — bump when upgrading the stack.
-ARG GAS_KILLER_SERVICE_REF=28d99dca32928df502f47d937bea006868d0172a
+ARG GAS_KILLER_SERVICE_REF=1e3b7bed10a65b35b2a137e15c67f99ab83840b4
 RUN git clone https://github.com/gas-killer/service.git /gas-killer-service && \
     git -C /gas-killer-service checkout "${GAS_KILLER_SERVICE_REF}" && \
     git -C /gas-killer-service submodule update --init --recursive contracts/lib/eigenlayer-middleware && \
