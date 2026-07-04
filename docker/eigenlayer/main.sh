@@ -278,6 +278,8 @@ fi
 # their BLS middleware registration.
 echo "Deploying Gas Killer ECDSA stack (ECDSAStakeRegistry + GasKillerServiceManager)..."
 cd /gas-killer-service/contracts
+# forge's vm.writeJson does not create parent directories.
+mkdir -p "script/deployments/ecdsa-stack"
 forge script script/DeployECDSAStack.s.sol:DeployECDSAStack \
     --rpc-url "$RPC_URL"         \
     --private-key "$PRIVATE_KEY" \
