@@ -21,6 +21,10 @@ if [ -z "$STRATEGY_MANAGER_ADDRESS" ]; then
   echo "Error: STRATEGY_MANAGER_ADDRESS is not set in the environment variables."
   exit 1
 fi
+if [ -z "$AVS_DIRECTORY_ADDRESS" ]; then
+  echo "Error: AVS_DIRECTORY_ADDRESS is not set in the environment variables (required for the Gas Killer ECDSA stack)."
+  exit 1
+fi
 if [ -z "$RPC_URL" ]; then
   echo "Error: RPC_URL is not set in the environment variables."
   exit 1
@@ -268,6 +272,46 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
+# Deploy the Gas Killer ECDSA stack: the EigenLayer ECDSAStakeRegistry that
+# verifies operator quorum signatures on-chain, plus the GasKillerServiceManager
+# wired to the AVSDirectory. Operators are registered with it below, right after
+# their BLS middleware registration.
+echo "Deploying Gas Killer ECDSA stack (ECDSAStakeRegistry + GasKillerServiceManager)..."
+cd /gas-killer-service/contracts
+# forge's vm.writeJson does not create parent directories.
+mkdir -p "script/deployments/ecdsa-stack"
+forge script script/DeployECDSAStack.s.sol:DeployECDSAStack \
+    --rpc-url "$RPC_URL"         \
+    --private-key "$PRIVATE_KEY" \
+    --broadcast                  \
+    > /dev/null 2>&1
+if [ $? -ne 0 ]; then
+    echo "Error: Failed to deploy the Gas Killer ECDSA stack"
+    exit 1
+fi
+ECDSA_DEPLOY_JSON="/gas-killer-service/contracts/script/deployments/ecdsa-stack/$chain_id.json"
+if [ ! -f "$ECDSA_DEPLOY_JSON" ]; then
+    echo "Error: ECDSA stack deployment JSON not found at $ECDSA_DEPLOY_JSON"
+    exit 1
+fi
+ECDSA_STAKE_REGISTRY_ADDRESS=$(jq -r '.addresses.ecdsaStakeRegistry' "$ECDSA_DEPLOY_JSON")
+GAS_KILLER_SERVICE_MANAGER_ADDRESS=$(jq -r '.addresses.gasKillerServiceManager' "$ECDSA_DEPLOY_JSON")
+if [ -z "$ECDSA_STAKE_REGISTRY_ADDRESS" ] || [ "$ECDSA_STAKE_REGISTRY_ADDRESS" = "null" ] || \
+   [ -z "$GAS_KILLER_SERVICE_MANAGER_ADDRESS" ] || [ "$GAS_KILLER_SERVICE_MANAGER_ADDRESS" = "null" ]; then
+    echo "Error: Failed to read ECDSA stack addresses from $ECDSA_DEPLOY_JSON"
+    exit 1
+fi
+export ECDSA_STAKE_REGISTRY_ADDRESS
+export GAS_KILLER_SERVICE_MANAGER_ADDRESS
+echo "ECDSAStakeRegistry: $ECDSA_STAKE_REGISTRY_ADDRESS"
+echo "GasKillerServiceManager: $GAS_KILLER_SERVICE_MANAGER_ADDRESS"
+
+merged_json=$(jq -s '.[0] * .[1]' ~/.nodes/avs_deploy.json "$ECDSA_DEPLOY_JSON")
+echo "$merged_json" > ~/.nodes/avs_deploy.json
+echo "$merged_json" > /bls-middleware/contracts/avs_deploy.json
+
+cd /bls-middleware/contracts
+
 # On real networks (i.e. not anvil), EigenLayer enforces an ALLOCATION_CONFIGURATION_DELAY
 # (75 blocks on Sepolia, ~15 minutes). SetupMiddleware.s.sol calls modifyAllocations which creates
 # a *pending* allocation; registerForOperatorSets will revert with BelowMinimumStakeRequirement
@@ -379,13 +423,50 @@ for i in $(seq 1 $num_accounts); do
         echo "Error: Failed to register operator $OPERATOR_ADDRESS"
         exit 1
     fi
-    
+
+    # Register the operator with the Gas Killer ECDSAStakeRegistry (signing key =
+    # operator address; the AVSDirectory registration digest is signed in-script).
+    echo "Registering operator $OPERATOR_ADDRESS with the ECDSA stake registry..."
+    cd /gas-killer-service/contracts
+    forge script script/RegisterOperatorECDSA.s.sol:RegisterOperatorECDSA \
+        --rpc-url "$RPC_URL"                \
+        --private-key $OPERATOR_PRIVATE_KEY \
+        --isolate                           \
+        --slow                              \
+        --skip-simulation                   \
+        --broadcast                         \
+        > /dev/null 2>&1
+    if [ $? -ne 0 ]; then
+        echo "Error: Failed to register operator $OPERATOR_ADDRESS with the ECDSA stake registry"
+        exit 1
+    fi
+    cd /bls-middleware/contracts
+
     WEIGHT=$(cast call $STAKE_REGISTRY "weightOfOperatorForQuorum(uint8,address)(uint96)" 0 $OPERATOR_ADDRESS --rpc-url $RPC_URL)
     if [ $? -ne 0 ]; then
         echo "Error: Failed to get operator weight for quorum for operator $i"
         exit 1
     fi
     echo "Operator $i weight in quorum 0: $WEIGHT"
+
+    ECDSA_WEIGHT=$(cast call $ECDSA_STAKE_REGISTRY_ADDRESS "getLastCheckpointOperatorWeight(address)(uint256)" $OPERATOR_ADDRESS --rpc-url $RPC_URL)
+    echo "Operator $i ECDSA stake registry weight: $ECDSA_WEIGHT"
 done
+
+# Set the ECDSA stake threshold now that all operators are registered
+echo "Finalizing Gas Killer ECDSA stake threshold..."
+cd /gas-killer-service/contracts
+forge script script/FinalizeECDSAStack.s.sol:FinalizeECDSAStack \
+    --rpc-url "$RPC_URL"         \
+    --private-key "$PRIVATE_KEY" \
+    --broadcast                  \
+    > /dev/null 2>&1
+if [ $? -ne 0 ]; then
+    echo "Error: Failed to finalize the ECDSA stake threshold"
+    exit 1
+fi
+cd /bls-middleware/contracts
+ECDSA_THRESHOLD=$(cast call $ECDSA_STAKE_REGISTRY_ADDRESS "getLastCheckpointThresholdWeight()(uint256)" --rpc-url $RPC_URL)
+echo "ECDSA stake registry threshold weight: $ECDSA_THRESHOLD"
 
 echo "Script execution finished. Container will now exit."

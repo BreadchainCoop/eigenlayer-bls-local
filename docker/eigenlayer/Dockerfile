@@ -43,6 +43,16 @@ RUN git clone --branch v0.1 --depth 1 --recurse-submodules \
 # Clone commonware-restaking-contracts directly with all submodules
 RUN git clone --recurse-submodules https://github.com/BreadchainCoop/commonware-restaking-contracts.git
 
+# Clone the Gas Killer service repo: contracts/ carries the ECDSA AVS stack
+# (EigenLayer ECDSAStakeRegistry via the eigenlayer-middleware submodule, the
+# GasKillerServiceManager, and the deploy/registration forge scripts main.sh runs).
+# Pinned to a commit for reproducible builds — bump when upgrading the stack.
+ARG GAS_KILLER_SERVICE_REF=1e3b7bed10a65b35b2a137e15c67f99ab83840b4
+RUN git clone https://github.com/gas-killer/service.git /gas-killer-service && \
+    git -C /gas-killer-service checkout "${GAS_KILLER_SERVICE_REF}" && \
+    git -C /gas-killer-service submodule update --init --recursive contracts/lib/eigenlayer-middleware && \
+    cd /gas-killer-service/contracts && forge build
+
 # Set working directory to root (scripts handle navigation internally)
 WORKDIR /
 
