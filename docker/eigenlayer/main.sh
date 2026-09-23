@@ -71,6 +71,22 @@ if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
     exit 1
 fi
 
+# Each operator's whole stake is STAKE_AMOUNT, and registration reverts with
+# BelowMinimumStakeRequirement below the quorum's minimumStake. Checked before anything is funded
+# or deployed, since on a live network that is where the cost is.
+STAKE_AMOUNT=${STAKE_AMOUNT:-100000000000000}
+export STAKE_AMOUNT
+QUORUM_CONFIG=/bls-middleware/contracts/docker/eigenlayer/config.json
+MINIMUM_STAKE=$(jq -r '.quorum.minimumStake' "$QUORUM_CONFIG")
+if [ -z "$MINIMUM_STAKE" ] || [ "$MINIMUM_STAKE" = "null" ]; then
+    echo "Error: Failed to read quorum.minimumStake from $QUORUM_CONFIG"
+    exit 1
+fi
+if [ "$STAKE_AMOUNT" -lt "$MINIMUM_STAKE" ]; then
+    echo "Error: STAKE_AMOUNT ($STAKE_AMOUNT) is below quorum.minimumStake ($MINIMUM_STAKE); operators could not register"
+    exit 1
+fi
+
 # Create the number of test accounts specified in the environment variables
 if [ -n "$TEST_ACCOUNTS" ]; then
     num_accounts=$TEST_ACCOUNTS
@@ -268,48 +284,30 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-# On real networks (i.e. not anvil), EigenLayer enforces an ALLOCATION_CONFIGURATION_DELAY
-# (75 blocks on Sepolia, ~15 minutes). SetupMiddleware.s.sol calls modifyAllocations which creates
-# a *pending* allocation; registerForOperatorSets will revert with BelowMinimumStakeRequirement
-# until those blocks have elapsed. Poll each operator until their minimum slashable stake is
-# non-zero before proceeding to RegisterOperator.
-if [ "$ENVIRONMENT" = "TESTNET" ] && [ -z "$IS_ANVIL_RPC" ]; then
-    echo "Waiting for operator allocations to become effective on testnet (ALLOCATION_CONFIGURATION_DELAY)..."
-    AVS_ADDRESS=$(cat ~/.nodes/avs_deploy.json | jq -r '.addresses.IncredibleSquaringServiceManager')
-    if [ -z "$AVS_ADDRESS" ] || [ "$AVS_ADDRESS" = "null" ]; then
-        echo "Error: Failed to get IncredibleSquaringServiceManager address for allocation polling"
-        exit 1
-    fi
+# RegisterOperator.s.sol allocates the operator's stake and then registers it. modifyAllocations
+# reverts with UninitializedAllocationDelay until the delay registerAsOperator set in register.sh
+# takes effect, ALLOCATION_CONFIGURATION_DELAY blocks later (75 on Sepolia, ~15 minutes). Anvil
+# overrides the delay per operator below instead. The allocation itself lands a block before the
+# registration: the script rolls a block and runs with --slow.
+if [ -z "$IS_ANVIL_RPC" ]; then
+    echo "Waiting for operator allocation delays to take effect (ALLOCATION_CONFIGURATION_DELAY)..."
     MAX_WAIT=1800
     for i in $(seq 1 $num_accounts); do
-        OP_KEY=$(cat ~/.nodes/operator_keys/testacc${i}.private.ecdsa.key.json | jq -r .privateKey)
+        OP_KEY=$(jq -r .privateKey ~/.nodes/operator_keys/testacc${i}.private.ecdsa.key.json)
         OP_ADDR=$(cast wallet address --private-key $OP_KEY)
-        echo "Polling for operator $i ($OP_ADDR) allocation to become effective..."
         ELAPSED=0
-        while [ $ELAPSED -lt $MAX_WAIT ]; do
-            STAKE=$(cast call $ALLOCATION_MANAGER_ADDRESS \
-                "getMinimumSlashableStake((address,uint32),address[],address[],uint32)" \
-                "($AVS_ADDRESS,0)" \
-                "[$OP_ADDR]" \
-                "[$LST_STRATEGY_ADDRESS]" \
-                "$(cast block-number --rpc-url $RPC_URL)" \
-                --rpc-url $RPC_URL 2>/dev/null || true)
-            # getMinimumSlashableStake returns a uint96[][] — non-zero looks like [[N]]
-            # Zero allocation returns [[0]] or an error; either way grep for a non-zero hex/decimal
-            if echo "$STAKE" | grep -qE '[1-9][0-9a-fA-F]*'; then
-                echo "Operator $i allocation is now effective (stake: $STAKE)"
-                break
+        # getAllocationDelay returns (isSet, delay); only isSet matters here.
+        until [ "$(cast call $ALLOCATION_MANAGER_ADDRESS "getAllocationDelay(address)(bool,uint32)" $OP_ADDR --rpc-url $RPC_URL 2>/dev/null | head -1)" = "true" ]; do
+            if [ $ELAPSED -ge $MAX_WAIT ]; then
+                echo "Error: Allocation delay for operator $i ($OP_ADDR) not set after ${MAX_WAIT}s"
+                exit 1
             fi
-            echo "Allocation not yet effective for operator $i, waiting... (${ELAPSED}s elapsed)"
+            echo "Allocation delay for operator $i not yet in effect, waiting... (${ELAPSED}s elapsed)"
             sleep 15
             ELAPSED=$((ELAPSED + 15))
         done
-        if [ $ELAPSED -ge $MAX_WAIT ]; then
-            echo "Error: Timed out waiting for operator $i allocation to become effective after ${MAX_WAIT}s"
-            exit 1
-        fi
+        echo "Allocation delay for operator $i ($OP_ADDR) is in effect"
     done
-    echo "All operator allocations are effective. Proceeding with registration."
 fi
 
 # Get stake registry address once

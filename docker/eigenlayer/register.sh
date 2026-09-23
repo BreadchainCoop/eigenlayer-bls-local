@@ -18,8 +18,9 @@ if [ -z "$RPC_URL" ]; then
   exit 1
 fi
 
-# 0.0001 ETH (Used for minting LST and depositing into strategy)
-STAKE_AMOUNT=100000000000000
+# Wei minted as LST and deposited into the strategy; it becomes the operator's whole stake, so it
+# must meet the quorum's minimumStake. main.sh checks that before any account is created.
+STAKE_AMOUNT=${STAKE_AMOUNT:-100000000000000}
 ACCOUNT_INFO=$(cast wallet new --json)
 PRIVATE_KEY=$(echo "$ACCOUNT_INFO" | jq -r '.[0].private_key')
 ADDRESS=$(echo "$ACCOUNT_INFO" | jq -r '.[0].address')

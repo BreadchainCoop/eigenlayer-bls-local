@@ -37,6 +37,7 @@ Relies on [BLS-middleware](https://github.com/BreadchainCoop/bls-middleware)
    PRIVATE_KEY=                 # Private key for signing operations
    FUNDED_KEY=                  # Private key used for funding test accounts (required for TESTNET)
    TEST_ACCOUNTS=3              # Number of test accounts to create
+   STAKE_AMOUNT=100000000000000 # Wei each test account stakes; must be at least quorum.minimumStake
    ```
 
    ### Service Configuration
