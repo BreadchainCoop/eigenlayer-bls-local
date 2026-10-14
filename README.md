@@ -110,6 +110,7 @@ To run the service in TESTNET mode on Sepolia, follow these steps:
 4. Monitor the deployment:
    - The setup process will take longer in TESTNET mode due to real network conditions
    - Check the logs for any errors or issues
+   - Each `forge script` run appends its full output to `~/.nodes/setup-forge.log` inside the container (the shared `.nodes` volume); when one fails, `main.sh` prints the last 40 lines of it
    - You can monitor transactions on [Sepolia Etherscan](https://sepolia.etherscan.io/)
 
 Note: Due to Sepolia's permissioned validator set, EigenPod functionality is PAUSED on Sepolia. Sepolia is recommended for AVS development as EigenLayer announced support for Sepolia as the primary testnet for AVS development.

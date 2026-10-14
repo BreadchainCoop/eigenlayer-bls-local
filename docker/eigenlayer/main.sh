@@ -117,19 +117,40 @@ if [ -n "$IS_ANVIL_RPC" ]; then
     fi
 fi
 
+# Every forge broadcast below goes through forge_broadcast, which:
+#  - skips forge's local simulation and sends one transaction at a time (--skip-simulation --slow),
+#    so each gas limit comes from the node's eth_estimateGas under the chain's live rules. The
+#    simulation prices contract creation with the EVM rules compiled into forge; after Sepolia's
+#    Glamsterdam fork (2026-10) its limits were ~5x too low and every deployment died out of gas.
+#  - adds 15% to each estimate (--gas-estimate-multiplier 115) instead of forge's default 30%:
+#    the estimates for these deterministic deployments are exact, so a smaller margin is enough
+#    and keeps the largest one (RegistryCoordinator, ~33M gas on Sepolia) further from any
+#    per-transaction gas cap.
+#  - keeps forge's output in $FORGE_LOG instead of /dev/null, so a failed script leaves its revert
+#    reason or out-of-gas trace behind; forge_failed prints the tail of that log before exiting.
+FORGE_BROADCAST_FLAGS="--broadcast --skip-simulation --slow --gas-estimate-multiplier 115 --non-interactive"
+FORGE_LOG="$HOME/.nodes/setup-forge.log"
+mkdir -p "$HOME/.nodes"
+forge_broadcast() {
+    echo "=== $(date -Iseconds) forge script $1 ===" >> "$FORGE_LOG"
+    forge script "$@" $FORGE_BROADCAST_FLAGS >> "$FORGE_LOG" 2>&1
+}
+forge_failed() {
+    echo "Error: $1 (full forge output in $FORGE_LOG)"
+    tail -n 40 "$FORGE_LOG"
+    exit 1
+}
+
 # Deploy AVS contracts
 chain_id=$(cast chain-id --rpc-url $RPC_URL)
 echo "Deploying service manager (IncredibleSquaringServiceManager) contracts..."
-cd bls-middleware/contracts && forge script script/IncredibleSquaringDeployer.s.sol \
+cd bls-middleware/contracts && forge_broadcast script/IncredibleSquaringDeployer.s.sol \
        --rpc-url $RPC_URL               \
        --private-key $PRIVATE_KEY       \
        --skip src/libraries/BN256G2.sol \
-       --optimize                       \
-       --broadcast                      \
-       > /dev/null 2>&1
+       --optimize
 if [ $? -ne 0 ]; then
-    echo "Error: Failed to run middleware deployment script"
-    exit 1
+    forge_failed "Failed to run middleware deployment script"
 fi
 cp script/deployments/incredible-squaring/$chain_id.json ~/.nodes/avs_deploy.json
 cp script/deployments/incredible-squaring/$chain_id.json avs_deploy.json
@@ -155,13 +176,11 @@ export THRESHOLD_DENOMINATOR
 export BLOCK_STALE_MEASURE
 
 cd /commonware-restaking-contracts
-forge script script/DeployAvsServiceManagerWrapper.s.sol:DeployAvsServiceManagerWrapper \
+forge_broadcast script/DeployAvsServiceManagerWrapper.s.sol:DeployAvsServiceManagerWrapper \
     --rpc-url "$RPC_URL"         \
-    --private-key "$PRIVATE_KEY" \
-    --broadcast                  \
-    > /dev/null 2>&1
+    --private-key "$PRIVATE_KEY"
 if [ $? -ne 0 ]; then
-    echo "Error: Failed to deploy AvsServiceManagerWrapper"; exit 1
+    forge_failed "Failed to deploy AvsServiceManagerWrapper"
 fi
 
 AVS_SERVICE_MANAGER_WRAPPER_ADDRESS=$(cat "script/deployments/avs-service-manager-wrapper/$chain_id.json" | jq -r '.addresses.avsServiceManagerWrapper')
@@ -199,25 +218,21 @@ echo "Successfully changed to commonware-restaking-contracts directory"
 # Deploy BLS Signature Check
 echo "Deploying BLSSigCheckOperatorStateRetriever..."
 
-forge script script/DeployBLSSigCheck.s.sol:DeployBLSSigCheckScript \
+forge_broadcast script/DeployBLSSigCheck.s.sol:DeployBLSSigCheckScript \
     --rpc-url "$RPC_URL"         \
-    --private-key "$PRIVATE_KEY" \
-    --broadcast                  \
-    > /dev/null 2>&1
+    --private-key "$PRIVATE_KEY"
 if [ $? -ne 0 ]; then
-  echo "Error: Failed to deploy BLSSigCheckOperatorStateRetriever"; exit 1
+  forge_failed "Failed to deploy BLSSigCheckOperatorStateRetriever"
 fi
 
 # Deploy Counter
 echo "Deploying Counter..."
 
-forge script script/DeployCounter.s.sol:DeployCounterScript \
+forge_broadcast script/DeployCounter.s.sol:DeployCounterScript \
     --rpc-url "$RPC_URL"         \
-    --private-key "$PRIVATE_KEY" \
-    --broadcast                  \
-    > /dev/null 2>&1
+    --private-key "$PRIVATE_KEY"
 if [ $? -ne 0 ]; then
-  echo "Error: Failed to deploy Counter"; exit 1
+  forge_failed "Failed to deploy Counter"
 fi
 
 echo "Contract deployment and run complete"
@@ -248,24 +263,18 @@ fi
 echo "Setting up middleware..."
 
 cd /bls-middleware/contracts
-forge script script/UAMPermissions.s.sol \
+forge_broadcast script/UAMPermissions.s.sol \
     --rpc-url $RPC_URL         \
-    --private-key $PRIVATE_KEY \
-    --broadcast                \
-    > /dev/null 2>&1
+    --private-key $PRIVATE_KEY
 if [ $? -ne 0 ]; then
-    echo "Error: Failed to run UAMPermissions script"
-    exit 1
+    forge_failed "Failed to run UAMPermissions script"
 fi
 
-forge script script/SetupMiddleware.s.sol \
+forge_broadcast script/SetupMiddleware.s.sol \
     --rpc-url $RPC_URL         \
-    --private-key $PRIVATE_KEY \
-    --broadcast                \
-    > /dev/null 2>&1
+    --private-key $PRIVATE_KEY
 if [ $? -ne 0 ]; then
-    echo "Error: Failed to run SetupMiddleware script"
-    exit 1
+    forge_failed "Failed to run SetupMiddleware script"
 fi
 
 # On real networks (i.e. not anvil), EigenLayer enforces an ALLOCATION_CONFIGURATION_DELAY
@@ -367,17 +376,12 @@ for i in $(seq 1 $num_accounts); do
     # Set the operator ID for registration
     export OPERATOR_ID="testacc${i}"
 
-    forge script script/RegisterOperator.s.sol \
+    forge_broadcast script/RegisterOperator.s.sol \
         --rpc-url "$RPC_URL"                \
         --private-key $OPERATOR_PRIVATE_KEY \
-        --isolate                           \
-        --slow                              \
-        --skip-simulation                   \
-        --broadcast                         \
-        > /dev/null 2>&1
+        --isolate
     if [ $? -ne 0 ]; then
-        echo "Error: Failed to register operator $OPERATOR_ADDRESS"
-        exit 1
+        forge_failed "Failed to register operator $OPERATOR_ADDRESS"
     fi
     
     WEIGHT=$(cast call $STAKE_REGISTRY "weightOfOperatorForQuorum(uint8,address)(uint96)" 0 $OPERATOR_ADDRESS --rpc-url $RPC_URL)
